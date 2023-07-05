@@ -45,13 +45,16 @@ import { ListStyle, ListType } from './dataset/enum/List'
 import { ICatalog, ICatalogItem } from './interface/Catalog'
 import { IPlaceholder } from './interface/Placeholder'
 import { defaultPlaceholderOption } from './dataset/constant/Placeholder'
+import { Plugin } from './core/plugin/Plugin'
+import { UsePlugin } from './interface/Plugin'
 
 export default class Editor {
 
   public command: Command
   public listener: Listener
   public register: Register
-  public destroy: Function
+  public destroy: () => void
+  public use: UsePlugin
 
   constructor(container: HTMLDivElement, data: IEditorData | IElement[], options: IEditorOption = {}) {
     const headerOptions: Required<IHeader> = {
@@ -125,6 +128,7 @@ export default class Editor {
       defaultHyperlinkColor: '#0000FF',
       paperDirection: PaperDirection.VERTICAL,
       inactiveAlpha: 0.6,
+      historyMaxRecordCount: 100,
       ...options,
       header: headerOptions,
       footer: footerOptions,
@@ -184,6 +188,9 @@ export default class Editor {
       shortcut.removeEvent()
       contextMenu.removeEvent()
     }
+    // 插件
+    const plugin = new Plugin(this)
+    this.use = plugin.use.bind(plugin)
   }
 
 }

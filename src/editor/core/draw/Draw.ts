@@ -140,7 +140,7 @@ export class Draw {
     this._createPage(0)
 
     this.i18n = new I18n()
-    this.historyManager = new HistoryManager()
+    this.historyManager = new HistoryManager(this)
     this.position = new Position(this)
     this.zone = new Zone(this)
     this.range = new RangeManager(this)
@@ -173,7 +173,7 @@ export class Draw {
     this.control = new Control(this)
 
     this.scrollObserver = new ScrollObserver(this)
-    this.selectionObserver = new SelectionObserver()
+    this.selectionObserver = new SelectionObserver(this)
     this.imageObserver = new ImageObserver()
 
     this.canvasEvent = new CanvasEvent(this)
@@ -736,6 +736,34 @@ export class Draw {
       watermark: watermark.data ? watermark : undefined,
       data
     }
+  }
+
+  public setValue(payload: Partial<IEditorData>) {
+    const { header, main, footer } = payload
+    if (!header && !main && !footer) return
+    if (header) {
+      formatElementList(header, {
+        editorOptions: this.options
+      })
+      this.header.setElementList(header)
+    }
+    if (main) {
+      formatElementList(main, {
+        editorOptions: this.options
+      })
+      this.elementList = main
+    }
+    if (footer) {
+      formatElementList(footer, {
+        editorOptions: this.options
+      })
+      this.footer.setElementList(footer)
+    }
+    // 渲染&计算&清空历史记录
+    this.historyManager.recovery()
+    this.render({
+      isSetCursor: false
+    })
   }
 
   private _wrapContainer(rootContainer: HTMLElement): HTMLDivElement {
