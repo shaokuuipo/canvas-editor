@@ -2,7 +2,23 @@ import { ICatalog, ICatalogItem } from '../../../interface/Catalog'
 import { IElement } from '../../../interface/Element'
 
 enum ElementType {
-  TITLE = 'title'
+  TEXT = 'text',
+  IMAGE = 'image',
+  TABLE = 'table',
+  HYPERLINK = 'hyperlink',
+  SUPERSCRIPT = 'superscript',
+  SUBSCRIPT = 'subscript',
+  SEPARATOR = 'separator',
+  PAGE_BREAK = 'pageBreak',
+  CONTROL = 'control',
+  CHECKBOX = 'checkbox',
+  RADIO = 'radio',
+  LATEX = 'latex',
+  TAB = 'tab',
+  DATE = 'date',
+  BLOCK = 'block',
+  TITLE = 'title',
+  LIST = 'list'
 }
 
 enum TitleLevel {
@@ -23,7 +39,20 @@ const titleOrderNumberMapping: Record<TitleLevel, number> = {
   [TitleLevel.SIXTH]: 6
 }
 
+const TEXTLIKE_ELEMENT_TYPE: ElementType[] = [
+  ElementType.TEXT,
+  ElementType.HYPERLINK,
+  ElementType.SUBSCRIPT,
+  ElementType.SUPERSCRIPT,
+  ElementType.CONTROL,
+  ElementType.DATE
+]
+
 const ZERO = '\u200B'
+
+function isTextLikeElement(element: IElement): boolean {
+  return !element.type || TEXTLIKE_ELEMENT_TYPE.includes(element.type)
+}
 
 function getCatalog(elementList: IElement[]): ICatalog | null {
   // 筛选标题
@@ -50,7 +79,9 @@ function getCatalog(elementList: IElement[]): ICatalog | null {
         valueList.push(titleE)
         t++
       }
-      titleElement.value = valueList.map(s => s.value)
+      titleElement.value = valueList
+        .filter(el => isTextLikeElement(el))
+        .map(el => el.value)
         .join('')
         .replace(new RegExp(ZERO, 'g'), '')
       titleElementList.push(titleElement)
@@ -60,7 +91,8 @@ function getCatalog(elementList: IElement[]): ICatalog | null {
   if (!titleElementList.length) return null
   // 查找到比最新元素大的标题时终止
   const recursiveInsert = (title: IElement, catalogItem: ICatalogItem) => {
-    const subCatalogItem = catalogItem.subCatalog[catalogItem.subCatalog.length - 1]
+    const subCatalogItem =
+      catalogItem.subCatalog[catalogItem.subCatalog.length - 1]
     const catalogItemLevel = titleOrderNumberMapping[subCatalogItem?.level]
     const titleLevel = titleOrderNumberMapping[title.level!]
     if (subCatalogItem && titleLevel > catalogItemLevel) {
@@ -97,7 +129,7 @@ function getCatalog(elementList: IElement[]): ICatalog | null {
   return catalog
 }
 
-onmessage = (evt) => {
+onmessage = evt => {
   const elementList = <IElement[]>evt.data
   const catalog = getCatalog(elementList)
   postMessage(catalog)

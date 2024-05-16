@@ -2,7 +2,6 @@ import { CommandAdapt } from './CommandAdapt'
 
 // 通过CommandAdapt中转避免直接暴露编辑器上下文
 export class Command {
-
   public executeMode: CommandAdapt['mode']
   public executeCut: CommandAdapt['cut']
   public executeCopy: CommandAdapt['copy']
@@ -10,6 +9,10 @@ export class Command {
   public executeSelectAll: CommandAdapt['selectAll']
   public executeBackspace: CommandAdapt['backspace']
   public executeSetRange: CommandAdapt['setRange']
+  public executeReplaceRange: CommandAdapt['replaceRange']
+  public executeSetPositionContext: CommandAdapt['setPositionContext']
+  public executeForceUpdate: CommandAdapt['forceUpdate']
+  public executeBlur: CommandAdapt['blur']
   public executeUndo: CommandAdapt['undo']
   public executeRedo: CommandAdapt['redo']
   public executePainter: CommandAdapt['painter']
@@ -43,7 +46,10 @@ export class Command {
   public executeCancelMergeTableCell: CommandAdapt['cancelMergeTableCell']
   public executeTableTdVerticalAlign: CommandAdapt['tableTdVerticalAlign']
   public executeTableBorderType: CommandAdapt['tableBorderType']
+  public executeTableTdBorderType: CommandAdapt['tableTdBorderType']
+  public executeTableTdSlashType: CommandAdapt['tableTdSlashType']
   public executeTableTdBackgroundColor: CommandAdapt['tableTdBackgroundColor']
+  public executeTableSelectAll: CommandAdapt['tableSelectAll']
   public executeImage: CommandAdapt['image']
   public executeHyperlink: CommandAdapt['hyperlink']
   public executeDeleteHyperlink: CommandAdapt['deleteHyperlink']
@@ -69,18 +75,42 @@ export class Command {
   public executePaperDirection: CommandAdapt['paperDirection']
   public executeSetPaperMargin: CommandAdapt['setPaperMargin']
   public executeInsertElementList: CommandAdapt['insertElementList']
+  public executeAppendElementList: CommandAdapt['appendElementList']
   public executeSetValue: CommandAdapt['setValue']
   public executeRemoveControl: CommandAdapt['removeControl']
   public executeSetLocale: CommandAdapt['setLocale']
   public executeLocationCatalog: CommandAdapt['locationCatalog']
   public executeWordTool: CommandAdapt['wordTool']
+  public executeSetHTML: CommandAdapt['setHTML']
+  public executeSetGroup: CommandAdapt['setGroup']
+  public executeDeleteGroup: CommandAdapt['deleteGroup']
+  public executeLocationGroup: CommandAdapt['locationGroup']
+  public executeSetZone: CommandAdapt['setZone']
+  public executeSetControlValue: CommandAdapt['setControlValue']
+  public executeSetControlExtension: CommandAdapt['setControlExtension']
+  public executeSetControlProperties: CommandAdapt['setControlProperties']
+  public executeSetControlHighlight: CommandAdapt['setControlHighlight']
   public getCatalog: CommandAdapt['getCatalog']
   public getImage: CommandAdapt['getImage']
+  public getOptions: CommandAdapt['getOptions']
   public getValue: CommandAdapt['getValue']
+  public getHTML: CommandAdapt['getHTML']
+  public getText: CommandAdapt['getText']
   public getWordCount: CommandAdapt['getWordCount']
+  public getRange: CommandAdapt['getRange']
   public getRangeText: CommandAdapt['getRangeText']
+  public getRangeContext: CommandAdapt['getRangeContext']
+  public getRangeRow: CommandAdapt['getRangeRow']
+  public getRangeParagraph: CommandAdapt['getRangeParagraph']
+  public getKeywordRangeList: CommandAdapt['getKeywordRangeList']
   public getPaperMargin: CommandAdapt['getPaperMargin']
   public getSearchNavigateInfo: CommandAdapt['getSearchNavigateInfo']
+  public getLocale: CommandAdapt['getLocale']
+  public getGroupIds: CommandAdapt['getGroupIds']
+  public getControlValue: CommandAdapt['getControlValue']
+  public getControlList: CommandAdapt['getControlList']
+  public getContainer: CommandAdapt['getContainer']
+  public getTitleValue: CommandAdapt['getTitleValue']
 
   constructor(adapt: CommandAdapt) {
     // 全局命令
@@ -91,6 +121,10 @@ export class Command {
     this.executeSelectAll = adapt.selectAll.bind(adapt)
     this.executeBackspace = adapt.backspace.bind(adapt)
     this.executeSetRange = adapt.setRange.bind(adapt)
+    this.executeReplaceRange = adapt.replaceRange.bind(adapt)
+    this.executeSetPositionContext = adapt.setPositionContext.bind(adapt)
+    this.executeForceUpdate = adapt.forceUpdate.bind(adapt)
+    this.executeBlur = adapt.blur.bind(adapt)
     // 撤销、重做、格式刷、清除格式
     this.executeUndo = adapt.undo.bind(adapt)
     this.executeRedo = adapt.redo.bind(adapt)
@@ -128,7 +162,11 @@ export class Command {
     this.executeCancelMergeTableCell = adapt.cancelMergeTableCell.bind(adapt)
     this.executeTableTdVerticalAlign = adapt.tableTdVerticalAlign.bind(adapt)
     this.executeTableBorderType = adapt.tableBorderType.bind(adapt)
-    this.executeTableTdBackgroundColor = adapt.tableTdBackgroundColor.bind(adapt)
+    this.executeTableTdBorderType = adapt.tableTdBorderType.bind(adapt)
+    this.executeTableTdSlashType = adapt.tableTdSlashType.bind(adapt)
+    this.executeTableTdBackgroundColor =
+      adapt.tableTdBackgroundColor.bind(adapt)
+    this.executeTableSelectAll = adapt.tableSelectAll.bind(adapt)
     this.executeImage = adapt.image.bind(adapt)
     this.executeHyperlink = adapt.hyperlink.bind(adapt)
     this.executeDeleteHyperlink = adapt.deleteHyperlink.bind(adapt)
@@ -156,19 +194,43 @@ export class Command {
     this.executeSetPaperMargin = adapt.setPaperMargin.bind(adapt)
     // 通用
     this.executeInsertElementList = adapt.insertElementList.bind(adapt)
+    this.executeAppendElementList = adapt.appendElementList.bind(adapt)
     this.executeSetValue = adapt.setValue.bind(adapt)
     this.executeRemoveControl = adapt.removeControl.bind(adapt)
     this.executeSetLocale = adapt.setLocale.bind(adapt)
     this.executeLocationCatalog = adapt.locationCatalog.bind(adapt)
     this.executeWordTool = adapt.wordTool.bind(adapt)
+    this.executeSetHTML = adapt.setHTML.bind(adapt)
+    this.executeSetGroup = adapt.setGroup.bind(adapt)
+    this.executeDeleteGroup = adapt.deleteGroup.bind(adapt)
+    this.executeLocationGroup = adapt.locationGroup.bind(adapt)
+    this.executeSetZone = adapt.setZone.bind(adapt)
     // 获取
     this.getImage = adapt.getImage.bind(adapt)
+    this.getOptions = adapt.getOptions.bind(adapt)
     this.getValue = adapt.getValue.bind(adapt)
+    this.getHTML = adapt.getHTML.bind(adapt)
+    this.getText = adapt.getText.bind(adapt)
     this.getWordCount = adapt.getWordCount.bind(adapt)
+    this.getRange = adapt.getRange.bind(adapt)
     this.getRangeText = adapt.getRangeText.bind(adapt)
+    this.getRangeContext = adapt.getRangeContext.bind(adapt)
+    this.getRangeRow = adapt.getRangeRow.bind(adapt)
+    this.getRangeParagraph = adapt.getRangeParagraph.bind(adapt)
+    this.getKeywordRangeList = adapt.getKeywordRangeList.bind(adapt)
     this.getCatalog = adapt.getCatalog.bind(adapt)
     this.getPaperMargin = adapt.getPaperMargin.bind(adapt)
     this.getSearchNavigateInfo = adapt.getSearchNavigateInfo.bind(adapt)
+    this.getLocale = adapt.getLocale.bind(adapt)
+    this.getGroupIds = adapt.getGroupIds.bind(adapt)
+    this.getContainer = adapt.getContainer.bind(adapt)
+    this.getTitleValue = adapt.getTitleValue.bind(adapt)
+    // 控件
+    this.executeSetControlValue = adapt.setControlValue.bind(adapt)
+    this.executeSetControlExtension = adapt.setControlExtension.bind(adapt)
+    this.executeSetControlProperties = adapt.setControlProperties.bind(adapt)
+    this.executeSetControlHighlight = adapt.setControlHighlight.bind(adapt)
+    this.getControlValue = adapt.getControlValue.bind(adapt)
+    this.getControlList = adapt.getControlList.bind(adapt)
   }
-
 }

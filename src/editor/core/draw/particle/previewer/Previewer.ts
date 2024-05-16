@@ -1,12 +1,14 @@
 import { EDITOR_PREFIX } from '../../../../dataset/constant/Editor'
 import { IEditorOption } from '../../../../interface/Editor'
 import { IElement, IElementPosition } from '../../../../interface/Element'
-import { IPreviewerCreateResult, IPreviewerDrawOption } from '../../../../interface/Previewer'
+import {
+  IPreviewerCreateResult,
+  IPreviewerDrawOption
+} from '../../../../interface/Previewer'
 import { downloadFile } from '../../../../utils'
 import { Draw } from '../../Draw'
 
 export class Previewer {
-
   private container: HTMLDivElement
   private canvas: HTMLCanvasElement
   private draw: Draw
@@ -20,6 +22,7 @@ export class Previewer {
   private resizerHandleList: HTMLDivElement[]
   private resizerImageContainer: HTMLDivElement
   private resizerImage: HTMLImageElement
+  private resizerSize: HTMLSpanElement
   private width: number
   private height: number
   private mousedownX: number
@@ -39,20 +42,51 @@ export class Previewer {
     this.previewerDrawOption = {}
     this.curPosition = null
     // 图片尺寸缩放
-    const { resizerSelection, resizerHandleList, resizerImageContainer, resizerImage } = this._createResizerDom()
+    const {
+      resizerSelection,
+      resizerHandleList,
+      resizerImageContainer,
+      resizerImage,
+      resizerSize
+    } = this._createResizerDom()
     this.resizerSelection = resizerSelection
     this.resizerHandleList = resizerHandleList
     this.resizerImageContainer = resizerImageContainer
     this.resizerImage = resizerImage
+    this.resizerSize = resizerSize
     this.width = 0
     this.height = 0
     this.mousedownX = 0
     this.mousedownY = 0
     this.curHandleIndex = 0 // 默认右下角
-    // 图片预览
-    resizerSelection.ondblclick = this._dblclick.bind(this)
     this.previewerContainer = null
     this.previewerImage = null
+  }
+
+  private _getElementPosition(
+    element: IElement,
+    position: IElementPosition | null = null
+  ): { x: number; y: number } {
+    let x = 0
+    let y = 0
+    const height = this.draw.getHeight()
+    const pageGap = this.draw.getPageGap()
+    const preY = this.draw.getPageNo() * (height + pageGap)
+    // 优先使用浮动位置
+    if (element.imgFloatPosition) {
+      x = element.imgFloatPosition.x!
+      y = element.imgFloatPosition.y + preY
+    } else if (position) {
+      const {
+        coordinate: {
+          leftTop: [left, top]
+        },
+        ascent
+      } = position
+      x = left
+      y = top + preY + ascent
+    }
+    return { x, y }
   }
 
   private _createResizerDom(): IPreviewerCreateResult {
@@ -61,10 +95,12 @@ export class Previewer {
     resizerSelection.classList.add(`${EDITOR_PREFIX}-resizer-selection`)
     resizerSelection.style.display = 'none'
     resizerSelection.style.borderColor = this.options.resizerColor
+    // 拖拽点
     const resizerHandleList: HTMLDivElement[] = []
     for (let i = 0; i < 8; i++) {
       const handleDom = document.createElement('div')
       handleDom.style.background = this.options.resizerColor
+      handleDom.classList.add(`resizer-handle`)
       handleDom.classList.add(`handle-${i}`)
       handleDom.setAttribute('data-index', String(i))
       handleDom.onmousedown = this._mousedown.bind(this)
@@ -72,6 +108,12 @@ export class Previewer {
       resizerHandleList.push(handleDom)
     }
     this.container.append(resizerSelection)
+    // 尺寸查看
+    const resizerSizeView = document.createElement('div')
+    resizerSizeView.classList.add(`${EDITOR_PREFIX}-resizer-size-view`)
+    const resizerSize = document.createElement('span')
+    resizerSizeView.append(resizerSize)
+    resizerSelection.append(resizerSizeView)
     // 拖拽镜像
     const resizerImageContainer = document.createElement('div')
     resizerImageContainer.classList.add(`${EDITOR_PREFIX}-resizer-image`)
@@ -79,7 +121,13 @@ export class Previewer {
     const resizerImage = document.createElement('img')
     resizerImageContainer.append(resizerImage)
     this.container.append(resizerImageContainer)
-    return { resizerSelection, resizerHandleList, resizerImageContainer, resizerImage }
+    return {
+      resizerSelection,
+      resizerHandleList,
+      resizerImageContainer,
+      resizerImage,
+      resizerSize
+    }
   }
 
   private _keydown = () => {
@@ -92,10 +140,8 @@ export class Previewer {
 
   private _mousedown(evt: MouseEvent) {
     this.canvas = this.draw.getPage()
-    if (!this.curPosition || !this.curElement) return
+    if (!this.curElement) return
     const { scale } = this.options
-    const height = this.draw.getHeight()
-    const pageGap = this.draw.getPageGap()
     this.mousedownX = evt.x
     this.mousedownY = evt.y
     const target = evt.target as HTMLDivElement
@@ -107,31 +153,40 @@ export class Previewer {
     // 拖拽图片镜像
     this.resizerImage.src = this.curElementSrc
     this.resizerImageContainer.style.display = 'block'
-    const { coordinate: { leftTop: [left, top] } } = this.curPosition
-    const prePageHeight = this.draw.getPageNo() * (height + pageGap)
-    this.resizerImageContainer.style.left = `${left}px`
-    this.resizerImageContainer.style.top = `${top + prePageHeight}px`
+    // 优先使用浮动位置信息
+    const { x: resizerLeft, y: resizerTop } = this._getElementPosition(
+      this.curElement,
+      this.curPosition
+    )
+    this.resizerImageContainer.style.left = `${resizerLeft}px`
+    this.resizerImageContainer.style.top = `${resizerTop}px`
     this.resizerImage.style.width = `${this.curElement.width! * scale}px`
     this.resizerImage.style.height = `${this.curElement.height! * scale}px`
     // 追加全局事件
     const mousemoveFn = this._mousemove.bind(this)
     document.addEventListener('mousemove', mousemoveFn)
-    document.addEventListener('mouseup', () => {
-      // 改变尺寸
-      if (this.curElement && this.curPosition) {
-        this.curElement.width = this.width
-        this.curElement.height = this.height
-        this.draw.render({ isSetCursor: false })
-        this.drawResizer(this.curElement, this.curPosition, this.previewerDrawOption)
+    document.addEventListener(
+      'mouseup',
+      () => {
+        // 改变尺寸
+        if (this.curElement) {
+          this.curElement.width = this.width
+          this.curElement.height = this.height
+          this.draw.render({
+            isSetCursor: true,
+            curIndex: this.curPosition?.index
+          })
+        }
+        // 还原副作用
+        this.resizerImageContainer.style.display = 'none'
+        document.removeEventListener('mousemove', mousemoveFn)
+        document.body.style.cursor = ''
+        this.canvas.style.cursor = 'text'
+      },
+      {
+        once: true
       }
-      // 还原副作用
-      this.resizerImageContainer.style.display = 'none'
-      document.removeEventListener('mousemove', mousemoveFn)
-      document.body.style.cursor = ''
-      this.canvas.style.cursor = 'text'
-    }, {
-      once: true
-    })
+    )
     evt.preventDefault()
   }
 
@@ -142,15 +197,31 @@ export class Previewer {
     let dy = 0
     switch (this.curHandleIndex) {
       case 0:
-        dx = this.mousedownX - evt.x
-        dy = this.mousedownY - evt.y
+        {
+          const offsetX = this.mousedownX - evt.x
+          const offsetY = this.mousedownY - evt.y
+          dx = Math.cbrt(offsetX ** 3 + offsetY ** 3)
+          dy = (this.curElement.height! * dx) / this.curElement.width!
+        }
         break
       case 1:
         dy = this.mousedownY - evt.y
         break
       case 2:
-        dx = evt.x - this.mousedownX
-        dy = this.mousedownY - evt.y
+        {
+          const offsetX = evt.x - this.mousedownX
+          const offsetY = this.mousedownY - evt.y
+          dx = Math.cbrt(offsetX ** 3 + offsetY ** 3)
+          dy = (this.curElement.height! * dx) / this.curElement.width!
+        }
+        break
+      case 4:
+        {
+          const offsetX = evt.x - this.mousedownX
+          const offsetY = evt.y - this.mousedownY
+          dx = Math.cbrt(offsetX ** 3 + offsetY ** 3)
+          dy = (this.curElement.height! * dx) / this.curElement.width!
+        }
         break
       case 3:
         dx = evt.x - this.mousedownX
@@ -159,27 +230,34 @@ export class Previewer {
         dy = evt.y - this.mousedownY
         break
       case 6:
-        dx = this.mousedownX - evt.x
-        dy = evt.y - this.mousedownY
+        {
+          const offsetX = this.mousedownX - evt.x
+          const offsetY = evt.y - this.mousedownY
+          dx = Math.cbrt(offsetX ** 3 + offsetY ** 3)
+          dy = (this.curElement.height! * dx) / this.curElement.width!
+        }
         break
       case 7:
         dx = this.mousedownX - evt.x
         break
-      default:
-        dx = evt.x - this.mousedownX
-        dy = evt.y - this.mousedownY
-        break
     }
-    this.width = this.curElement.width! + dx
-    this.height = this.curElement.height! + dy
-    this.resizerImage.style.width = `${this.width * scale}px`
-    this.resizerImage.style.height = `${this.height * scale}px`
+    // 图片实际宽高（变化大小除掉缩放比例）
+    const dw = this.curElement.width! + dx / scale
+    const dh = this.curElement.height! + dy / scale
+    if (dw <= 0 || dh <= 0) return
+    this.width = dw
+    this.height = dh
+    // 图片显示宽高
+    const elementWidth = dw * scale
+    const elementHeight = dh * scale
+    // 更新影子图片尺寸
+    this.resizerImage.style.width = `${elementWidth}px`
+    this.resizerImage.style.height = `${elementHeight}px`
+    // 更新预览包围框尺寸
+    this._updateResizerRect(elementWidth, elementHeight)
+    // 尺寸预览
+    this._updateResizerSizeView(elementWidth, elementHeight)
     evt.preventDefault()
-  }
-
-  private _dblclick() {
-    this._drawPreviewer()
-    document.body.style.overflow = 'hidden'
   }
 
   private _drawPreviewer() {
@@ -254,7 +332,7 @@ export class Previewer {
     let startX = 0
     let startY = 0
     let isAllowDrag = false
-    img.onmousedown = (evt) => {
+    img.onmousedown = evt => {
       isAllowDrag = true
       startX = evt.x
       startY = evt.y
@@ -262,8 +340,8 @@ export class Previewer {
     }
     previewerContainer.onmousemove = (evt: MouseEvent) => {
       if (!isAllowDrag) return
-      x += (evt.x - startX)
-      y += (evt.y - startY)
+      x += evt.x - startX
+      y += evt.y - startY
       startX = evt.x
       startY = evt.y
       this._setPreviewerTransform(scaleSize, rotateSize, x, y)
@@ -272,7 +350,7 @@ export class Previewer {
       isAllowDrag = false
       previewerContainer.style.cursor = 'auto'
     }
-    previewerContainer.onwheel = (evt) => {
+    previewerContainer.onwheel = evt => {
       evt.preventDefault()
       if (evt.deltaY < 0) {
         // 放大
@@ -286,11 +364,18 @@ export class Previewer {
     }
   }
 
-  public _setPreviewerTransform(scale: number, rotate: number, x: number, y: number) {
+  public _setPreviewerTransform(
+    scale: number,
+    rotate: number,
+    x: number,
+    y: number
+  ) {
     if (!this.previewerImage) return
     this.previewerImage.style.left = `${x}px`
     this.previewerImage.style.top = `${y}px`
-    this.previewerImage.style.transform = `scale(${scale}) rotate(${rotate * 90}deg)`
+    this.previewerImage.style.transform = `scale(${scale}) rotate(${
+      rotate * 90
+    }deg)`
   }
 
   private _clearPreviewer() {
@@ -299,48 +384,80 @@ export class Previewer {
     document.body.style.overflow = 'auto'
   }
 
-  public drawResizer(element: IElement, position: IElementPosition, options: IPreviewerDrawOption = {}) {
-    this.previewerDrawOption = options
-    const { scale } = this.options
-    const { coordinate: { leftTop: [left, top] }, ascent } = position
-    const elementWidth = element.width! * scale
-    const elementHeight = element.height! * scale
-    const height = this.draw.getHeight()
-    const pageGap = this.draw.getPageGap()
+  public _updateResizerRect(width: number, height: number) {
     const handleSize = this.options.resizerSize
-    const preY = this.draw.getPageNo() * (height + pageGap)
-    // 边框
-    this.resizerSelection.style.left = `${left}px`
-    this.resizerSelection.style.top = `${top + preY + ascent}px`
-    this.resizerSelection.style.width = `${elementWidth}px`
-    this.resizerSelection.style.height = `${elementHeight}px`
+    this.resizerSelection.style.width = `${width}px`
+    this.resizerSelection.style.height = `${height}px`
     // handle
     for (let i = 0; i < 8; i++) {
-      const left = i === 0 || i === 6 || i === 7
-        ? -handleSize
-        : i === 1 || i === 5
-          ? elementWidth / 2
-          : elementWidth - handleSize
-      const top = i === 0 || i === 1 || i === 2
-        ? -handleSize
-        : i === 3 || i === 7
-          ? elementHeight / 2 - handleSize
-          : elementHeight - handleSize
+      const left =
+        i === 0 || i === 6 || i === 7
+          ? -handleSize
+          : i === 1 || i === 5
+          ? width / 2
+          : width - handleSize
+      const top =
+        i === 0 || i === 1 || i === 2
+          ? -handleSize
+          : i === 3 || i === 7
+          ? height / 2 - handleSize
+          : height - handleSize
       this.resizerHandleList[i].style.left = `${left}px`
       this.resizerHandleList[i].style.top = `${top}px`
     }
-    this.resizerSelection.style.display = 'block'
-    this.curElement = element
+  }
+
+  public _updateResizerSizeView(width: number, height: number) {
+    this.resizerSize.innerText = `${Math.round(width)} × ${Math.round(height)}`
+  }
+
+  public render() {
+    this._drawPreviewer()
+    document.body.style.overflow = 'hidden'
+  }
+
+  public drawResizer(
+    element: IElement,
+    position: IElementPosition | null = null,
+    options: IPreviewerDrawOption = {}
+  ) {
+    // 缓存配置
+    this.previewerDrawOption = options
     this.curElementSrc = element[options.srcKey || 'value'] || ''
-    this.curPosition = position
-    this.width = this.curElement.width! * scale
-    this.height = this.curElement.height! * scale
+    // 更新渲染尺寸及位置
+    this.updateResizer(element, position)
+    // 监听事件
     document.addEventListener('keydown', this._keydown)
+  }
+
+  public updateResizer(
+    element: IElement,
+    position: IElementPosition | null = null
+  ) {
+    const { scale } = this.options
+    const elementWidth = element.width! * scale
+    const elementHeight = element.height! * scale
+    // 尺寸预览
+    this._updateResizerSizeView(elementWidth, elementHeight)
+    // 优先使用浮动位置信息
+    const { x: resizerLeft, y: resizerTop } = this._getElementPosition(
+      element,
+      position
+    )
+    this.resizerSelection.style.left = `${resizerLeft}px`
+    this.resizerSelection.style.top = `${resizerTop}px`
+    // 更新预览包围框尺寸
+    this._updateResizerRect(elementWidth, elementHeight)
+    this.resizerSelection.style.display = 'block'
+    // 缓存基础信息
+    this.curElement = element
+    this.curPosition = position
+    this.width = elementWidth
+    this.height = elementHeight
   }
 
   public clearResizer() {
     this.resizerSelection.style.display = 'none'
     document.removeEventListener('keydown', this._keydown)
   }
-
 }

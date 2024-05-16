@@ -1,6 +1,6 @@
 import { ElementStyleKey } from '../../dataset/enum/ElementStyle'
 import { IElement, IElementPosition } from '../../interface/Element'
-import { ICurrentPosition } from '../../interface/Position'
+import { ICurrentPosition, IPositionContext } from '../../interface/Position'
 import { Draw } from '../draw/Draw'
 import { Position } from '../position/Position'
 import { RangeManager } from '../range/RangeManager'
@@ -18,16 +18,16 @@ import { drop } from './handlers/drop'
 import click from './handlers/click'
 import composition from './handlers/composition'
 import drag from './handlers/drag'
+import { isIOS } from '../../utils/ua'
 
 export interface ICompositionInfo {
-  elementList: IElement[];
-  startIndex: number;
-  endIndex: number;
-  value: string;
+  elementList: IElement[]
+  startIndex: number
+  endIndex: number
+  value: string
 }
 
 export class CanvasEvent {
-
   public isAllowSelection: boolean
   public isComposing: boolean
   public compositionInfo: ICompositionInfo | null
@@ -37,6 +37,7 @@ export class CanvasEvent {
   public cacheRange: IRange | null
   public cacheElementList: IElement[] | null
   public cachePositionList: IElementPosition[] | null
+  public cachePositionContext: IPositionContext | null
   public mouseDownStartPosition: ICurrentPosition | null
 
   private draw: Draw
@@ -60,6 +61,7 @@ export class CanvasEvent {
     this.cacheRange = null
     this.cacheElementList = null
     this.cachePositionList = null
+    this.cachePositionContext = null
     this.mouseDownStartPosition = null
   }
 
@@ -68,9 +70,13 @@ export class CanvasEvent {
   }
 
   public register() {
+    this.pageContainer.addEventListener('click', this.click.bind(this))
     this.pageContainer.addEventListener('mousedown', this.mousedown.bind(this))
     this.pageContainer.addEventListener('mouseup', this.mouseup.bind(this))
-    this.pageContainer.addEventListener('mouseleave', this.mouseleave.bind(this))
+    this.pageContainer.addEventListener(
+      'mouseleave',
+      this.mouseleave.bind(this)
+    )
     this.pageContainer.addEventListener('mousemove', this.mousemove.bind(this))
     this.pageContainer.addEventListener('dblclick', this.dblclick.bind(this))
     this.pageContainer.addEventListener('dragover', this.dragover.bind(this))
@@ -135,6 +141,13 @@ export class CanvasEvent {
     mousedown(evt, this)
   }
 
+  public click() {
+    // IOS系统限制非用户主动触发事件的键盘弹出
+    if (isIOS && !this.draw.isReadonly()) {
+      this.draw.getCursor().getAgentDom().focus()
+    }
+  }
+
   public mouseup(evt: MouseEvent) {
     mouseup(evt, this)
   }
@@ -182,5 +195,4 @@ export class CanvasEvent {
   public dragover(evt: DragEvent | MouseEvent) {
     drag.dragover(evt, this)
   }
-
 }

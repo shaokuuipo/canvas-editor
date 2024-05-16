@@ -1,21 +1,25 @@
+import { IEditorOption } from '../../interface/Editor'
 import { debounce } from '../../utils'
 import { Draw } from '../draw/Draw'
 
 export interface IElementVisibleInfo {
-  intersectionHeight: number;
+  intersectionHeight: number
 }
 
 export interface IPageVisibleInfo {
-  intersectionPageNo: number;
-  visiblePageNoList: number[];
+  intersectionPageNo: number
+  visiblePageNoList: number[]
 }
 
 export class ScrollObserver {
-
   private draw: Draw
+  private options: Required<IEditorOption>
+  private scrollContainer: Element | Document
 
   constructor(draw: Draw) {
     this.draw = draw
+    this.options = draw.getOptions()
+    this.scrollContainer = this.getScrollContainer()
     // 监听滚轮
     setTimeout(() => {
       if (!window.scrollY) {
@@ -25,18 +29,28 @@ export class ScrollObserver {
     this._addEvent()
   }
 
+  public getScrollContainer(): Element | Document {
+    return this.options.scrollContainerSelector
+      ? document.querySelector(this.options.scrollContainerSelector) || document
+      : document
+  }
+
   private _addEvent() {
-    document.addEventListener('scroll', this._observer)
+    this.scrollContainer.addEventListener('scroll', this._observer)
   }
 
   public removeEvent() {
-    document.removeEventListener('scroll', this._observer)
+    this.scrollContainer.removeEventListener('scroll', this._observer)
   }
 
   public getElementVisibleInfo(element: Element): IElementVisibleInfo {
     const rect = element.getBoundingClientRect()
-    const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-    const visibleHeight = Math.min(rect.bottom, viewHeight) - Math.max(rect.top, 0)
+    const viewHeight =
+      this.scrollContainer === document
+        ? Math.max(document.documentElement.clientHeight, window.innerHeight)
+        : (<Element>this.scrollContainer).clientHeight
+    const visibleHeight =
+      Math.min(rect.bottom, viewHeight) - Math.max(rect.top, 0)
     return {
       intersectionHeight: visibleHeight > 0 ? visibleHeight : 0
     }
@@ -71,5 +85,4 @@ export class ScrollObserver {
     this.draw.setIntersectionPageNo(intersectionPageNo)
     this.draw.setVisiblePageNoList(visiblePageNoList)
   }, 150)
-
 }

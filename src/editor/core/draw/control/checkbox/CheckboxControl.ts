@@ -1,13 +1,16 @@
 import { ControlComponent } from '../../../../dataset/enum/Control'
 import { KeyMap } from '../../../../dataset/enum/KeyMap'
-import { IControlInstance } from '../../../../interface/Control'
+import {
+  IControlContext,
+  IControlInstance,
+  IControlRuleOption
+} from '../../../../interface/Control'
 import { IElement } from '../../../../interface/Element'
 import { Control } from '../Control'
 
 export class CheckboxControl implements IControlInstance {
-
-  private element: IElement
-  private control: Control
+  protected element: IElement
+  protected control: Control
 
   constructor(element: IElement, control: Control) {
     this.element = element
@@ -64,12 +67,19 @@ export class CheckboxControl implements IControlInstance {
     return -1
   }
 
-  public setSelect() {
+  public setSelect(
+    codes: string[],
+    context: IControlContext = {},
+    options: IControlRuleOption = {}
+  ) {
+    // 校验是否可以设置
+    if (!options.isIgnoreDisabledRule && this.control.getIsDisabledControl()) {
+      return
+    }
     const { control } = this.element
-    const elementList = this.control.getElementList()
-    const { startIndex } = this.control.getRange()
+    const elementList = context.elementList || this.control.getElementList()
+    const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
-    const data: string[] = []
     // 向左查找
     let preIndex = startIndex
     while (preIndex > 0) {
@@ -81,10 +91,8 @@ export class CheckboxControl implements IControlInstance {
         break
       }
       if (preElement.controlComponent === ControlComponent.CHECKBOX) {
-        const checkbox = preElement.checkbox
-        if (checkbox && checkbox.value && checkbox.code) {
-          data.unshift(checkbox.code)
-        }
+        const checkbox = preElement.checkbox!
+        checkbox.value = codes.includes(checkbox.code!)
       }
       preIndex--
     }
@@ -99,17 +107,19 @@ export class CheckboxControl implements IControlInstance {
         break
       }
       if (nextElement.controlComponent === ControlComponent.CHECKBOX) {
-        const checkbox = nextElement.checkbox
-        if (checkbox && checkbox.value && checkbox.code) {
-          data.push(checkbox.code)
-        }
+        const checkbox = nextElement.checkbox!
+        checkbox.value = codes.includes(checkbox.code!)
       }
       nextIndex++
     }
-    control!.code = data.join(',')
+    control!.code = codes.join(',')
+    this.control.repaintControl()
   }
 
-  public keydown(evt: KeyboardEvent): number {
+  public keydown(evt: KeyboardEvent): number | null {
+    if (this.control.getIsDisabledControl()) {
+      return null
+    }
     const range = this.control.getRange()
     // 收缩边界到Value内
     this.control.shrinkBoundary()
@@ -124,5 +134,4 @@ export class CheckboxControl implements IControlInstance {
   public cut(): number {
     return -1
   }
-
 }

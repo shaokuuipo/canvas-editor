@@ -27,6 +27,7 @@
   overflow: hidden;
   color: transparent;
   user-select: none;
+  caret-color: transparent;
   background-color: transparent;
 }
 
@@ -67,4 +68,10 @@
   to {
     opacity: 1
   }
+}
+
+.ce-float-image {
+  position: absolute;
+  opacity: 0.5;
+  pointer-events: none;
 }

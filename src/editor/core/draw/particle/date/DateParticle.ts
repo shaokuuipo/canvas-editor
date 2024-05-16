@@ -1,13 +1,11 @@
 import { ElementType } from '../../../../dataset/enum/Element'
 import { IElement, IElementPosition } from '../../../../interface/Element'
-import { IRowElement } from '../../../../interface/Row'
 import { formatElementContext } from '../../../../utils/element'
 import { RangeManager } from '../../../range/RangeManager'
 import { Draw } from '../../Draw'
 import { DatePicker } from './DatePicker'
 
 export class DateParticle {
-
   private draw: Draw
   private range: RangeManager
   private datePicker: DatePicker
@@ -32,7 +30,7 @@ export class DateParticle {
           wed: t('datePicker.weeks.wed'),
           thu: t('datePicker.weeks.thu'),
           fri: t('datePicker.weeks.fri'),
-          sat: t('datePicker.weeks.sat'),
+          sat: t('datePicker.weeks.sat')
         },
         year: t('datePicker.year'),
         month: t('datePicker.month'),
@@ -51,16 +49,22 @@ export class DateParticle {
     const elementList = this.draw.getElementList()
     const startElement = elementList[leftIndex + 1]
     // 删除旧时间
-    this.draw.spliceElementList(elementList, leftIndex + 1, rightIndex - leftIndex)
+    this.draw.spliceElementList(
+      elementList,
+      leftIndex + 1,
+      rightIndex - leftIndex
+    )
     this.range.setRange(leftIndex, leftIndex)
     // 插入新时间
     const dateElement: IElement = {
       type: ElementType.DATE,
       value: '',
       dateFormat: startElement.dateFormat,
-      valueList: [{
-        value: date
-      }]
+      valueList: [
+        {
+          value: date
+        }
+      ]
     }
     formatElementContext(elementList, [dateElement], leftIndex)
     this.draw.insertElementList([dateElement])
@@ -113,7 +117,10 @@ export class DateParticle {
     const elementList = this.draw.getElementList()
     const range = this.getDateElementRange()
     const value = range
-      ? elementList.slice(range[0] + 1, range[1] + 1).map(el => el.value).join('')
+      ? elementList
+          .slice(range[0] + 1, range[1] + 1)
+          .map(el => el.value)
+          .join('')
       : ''
     this.datePicker.render({
       value,
@@ -122,15 +129,4 @@ export class DateParticle {
       startTop
     })
   }
-
-  public render(ctx: CanvasRenderingContext2D, element: IRowElement, x: number, y: number) {
-    ctx.save()
-    ctx.font = element.style
-    if (element.color) {
-      ctx.fillStyle = element.color
-    }
-    ctx.fillText(element.value, x, y)
-    ctx.restore()
-  }
-
 }

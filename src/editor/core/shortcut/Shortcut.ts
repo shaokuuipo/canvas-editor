@@ -7,7 +7,6 @@ import { titleKeys } from './keys/titleKeys'
 import { listKeys } from './keys/listKeys'
 
 export class Shortcut {
-
   private command: Command
   private globalShortcutList: IRegisterShortcut[]
   private agentShortcutList: IRegisterShortcut[]
@@ -17,11 +16,7 @@ export class Shortcut {
     this.globalShortcutList = []
     this.agentShortcutList = []
     // 内部快捷键
-    this._addShortcutList([
-      ...richtextKeys,
-      ...titleKeys,
-      ...listKeys
-    ])
+    this._addShortcutList([...richtextKeys, ...titleKeys, ...listKeys])
     // 全局快捷键
     this._addEvent()
     // 编辑器快捷键
@@ -38,12 +33,12 @@ export class Shortcut {
   }
 
   private _addShortcutList(payload: IRegisterShortcut[]) {
-    for (let s = 0; s < payload.length; s++) {
+    for (let s = payload.length - 1; s >= 0; s--) {
       const shortCut = payload[s]
       if (shortCut.isGlobal) {
-        this.globalShortcutList.push(shortCut)
+        this.globalShortcutList.unshift(shortCut)
       } else {
-        this.agentShortcutList.push(shortCut)
+        this.agentShortcutList.unshift(shortCut)
       }
     }
   }
@@ -66,20 +61,20 @@ export class Shortcut {
     for (let s = 0; s < shortCutList.length; s++) {
       const shortCut = shortCutList[s]
       if (
-        (
-          shortCut.mod
-            ? isMod(evt) === !!shortCut.mod
-            : evt.ctrlKey === !!shortCut.ctrl && evt.metaKey === !!shortCut.meta
-        ) &&
+        (shortCut.mod
+          ? isMod(evt) === !!shortCut.mod
+          : evt.ctrlKey === !!shortCut.ctrl &&
+            evt.metaKey === !!shortCut.meta) &&
         evt.shiftKey === !!shortCut.shift &&
         evt.altKey === !!shortCut.alt &&
         evt.key === shortCut.key
       ) {
-        shortCut.callback(this.command)
-        evt.preventDefault()
+        if (!shortCut.disable) {
+          shortCut?.callback?.(this.command)
+          evt.preventDefault()
+        }
         break
       }
     }
   }
-
 }

@@ -1,3 +1,6 @@
+import { ImageDisplay } from '../../../dataset/enum/Common'
+import { ControlComponent } from '../../../dataset/enum/Control'
+import { ElementType } from '../../../dataset/enum/Element'
 import { CanvasEvent } from '../CanvasEvent'
 
 export function mousemove(evt: MouseEvent, host: CanvasEvent) {
@@ -10,9 +13,29 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
     const { startIndex, endIndex } = host.cacheRange!
     const positionList = host.cachePositionList!
     for (let p = startIndex + 1; p <= endIndex; p++) {
-      const { coordinate: { leftTop, rightBottom } } = positionList[p]
-      if (x >= leftTop[0] && x <= rightBottom[0] && y >= leftTop[1] && y <= rightBottom[1]) {
+      const {
+        coordinate: { leftTop, rightBottom }
+      } = positionList[p]
+      if (
+        x >= leftTop[0] &&
+        x <= rightBottom[0] &&
+        y >= leftTop[1] &&
+        y <= rightBottom[1]
+      ) {
         return
+      }
+    }
+    const cacheStartIndex = host.cacheRange?.startIndex
+    if (cacheStartIndex) {
+      // 浮动元素拖拽调整位置
+      const dragElement = host.cacheElementList![cacheStartIndex]
+      if (
+        dragElement?.type === ElementType.IMAGE &&
+        (dragElement.imgDisplay === ImageDisplay.FLOAT_TOP ||
+          dragElement.imgDisplay === ImageDisplay.FLOAT_BOTTOM)
+      ) {
+        draw.getPreviewer().clearResizer()
+        draw.getImageParticle().dragFloatImage(evt.movementX, evt.movementY)
       }
     }
     host.dragover(evt)
@@ -33,24 +56,23 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
     y: evt.offsetY
   })
   if (!~positionResult.index) return
-  const {
-    index,
-    isTable,
-    tdValueIndex,
-    tdIndex,
-    trIndex,
-    tableId
-  } = positionResult
+  const { index, isTable, tdValueIndex, tdIndex, trIndex, tableId } =
+    positionResult
   const {
     index: startIndex,
     isTable: startIsTable,
     tdIndex: startTdIndex,
-    trIndex: startTrIndex
+    trIndex: startTrIndex,
+    tableId: startTableId
   } = host.mouseDownStartPosition
   const endIndex = isTable ? tdValueIndex! : index
   // 判断是否是表格跨行/列
   const rangeManager = draw.getRange()
-  if (isTable && startIsTable && (tdIndex !== startTdIndex || trIndex !== startTrIndex)) {
+  if (
+    isTable &&
+    startIsTable &&
+    (tdIndex !== startTdIndex || trIndex !== startTrIndex)
+  ) {
     rangeManager.setRange(
       endIndex,
       endIndex,
@@ -62,12 +84,26 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
     )
   } else {
     let end = ~endIndex ? endIndex : 0
+    // 开始或结束位置存在表格，但是非相同表格则忽略选区设置
+    if ((startIsTable || isTable) && startTableId !== tableId) return
     // 开始位置
     let start = startIndex
     if (start > end) {
+      // prettier-ignore
       [start, end] = [end, start]
     }
     if (start === end) return
+    // 背景文本禁止选区
+    const elementList = draw.getElementList()
+    const startElement = elementList[start + 1]
+    const endElement = elementList[end]
+    if (
+      startElement?.controlComponent === ControlComponent.PLACEHOLDER &&
+      endElement?.controlComponent === ControlComponent.PLACEHOLDER &&
+      startElement.controlId === endElement.controlId
+    ) {
+      return
+    }
     rangeManager.setRange(start, end)
   }
   // 绘制

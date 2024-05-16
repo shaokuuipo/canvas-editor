@@ -5,7 +5,6 @@ import { mergeObject } from '../../utils'
 import { DeepPartial } from '../../interface/Common'
 
 export class I18n {
-
   private langMap: Map<string, ILang> = new Map([
     ['zhCN', zhCN],
     ['en', en]
@@ -15,10 +14,11 @@ export class I18n {
 
   public registerLangMap(locale: string, lang: DeepPartial<ILang>) {
     const sourceLang = this.langMap.get(locale)
-    this.langMap.set(
-      locale,
-      <ILang>mergeObject(sourceLang || zhCN, lang)
-    )
+    this.langMap.set(locale, <ILang>mergeObject(sourceLang || zhCN, lang))
+  }
+
+  public getLocale(): string {
+    return this.currentLocale
   }
 
   public setLocale(locale: string) {
@@ -44,5 +44,4 @@ export class I18n {
     }
     return value
   }
-
 }

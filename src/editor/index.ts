@@ -6,22 +6,35 @@ import { Command } from './core/command/Command'
 import { CommandAdapt } from './core/command/CommandAdapt'
 import { Listener } from './core/listener/Listener'
 import { RowFlex } from './dataset/enum/Row'
+import { ImageDisplay } from './dataset/enum/Common'
 import { ElementType } from './dataset/enum/Element'
 import { formatElementList } from './utils/element'
 import { Register } from './core/register/Register'
 import { ContextMenu } from './core/contextmenu/ContextMenu'
-import { IContextMenuContext, IRegisterContextMenu } from './interface/contextmenu/ContextMenu'
-import { EditorComponent, EditorZone, EditorMode, PageMode, PaperDirection } from './dataset/enum/Editor'
+import {
+  IContextMenuContext,
+  IRegisterContextMenu
+} from './interface/contextmenu/ContextMenu'
+import {
+  EditorComponent,
+  EditorZone,
+  EditorMode,
+  PageMode,
+  PaperDirection,
+  WordBreak
+} from './dataset/enum/Editor'
 import { EDITOR_COMPONENT } from './dataset/constant/Editor'
 import { IHeader } from './interface/Header'
 import { IWatermark } from './interface/Watermark'
 import { defaultHeaderOption } from './dataset/constant/Header'
 import { defaultWatermarkOption } from './dataset/constant/Watermark'
-import { ControlType, ImageDisplay } from './dataset/enum/Control'
+import { ControlIndentation, ControlType } from './dataset/enum/Control'
 import { defaultControlOption } from './dataset/constant/Control'
 import { IControlOption } from './interface/Control'
 import { ICheckboxOption } from './interface/Checkbox'
+import { IRadioOption } from './interface/Radio'
 import { defaultCheckboxOption } from './dataset/constant/Checkbox'
+import { defaultRadioOption } from './dataset/constant/Radio'
 import { DeepRequired } from './interface/Common'
 import { INavigateInfo } from './core/draw/interactive/Search'
 import { Shortcut } from './core/shortcut/Shortcut'
@@ -34,7 +47,7 @@ import { defaultCursorOption } from './dataset/constant/Cursor'
 import { IPageNumber } from './interface/PageNumber'
 import { defaultPageNumberOption } from './dataset/constant/PageNumber'
 import { VerticalAlign } from './dataset/enum/VerticalAlign'
-import { TableBorder } from './dataset/enum/table/Table'
+import { TableBorder, TdBorder, TdSlash } from './dataset/enum/table/Table'
 import { IFooter } from './interface/Footer'
 import { defaultFooterOption } from './dataset/constant/Footer'
 import { MaxHeightRatio, NumberType } from './dataset/enum/Common'
@@ -47,16 +60,49 @@ import { IPlaceholder } from './interface/Placeholder'
 import { defaultPlaceholderOption } from './dataset/constant/Placeholder'
 import { Plugin } from './core/plugin/Plugin'
 import { UsePlugin } from './interface/Plugin'
+import { EventBus } from './core/event/eventbus/EventBus'
+import { EventBusMap } from './interface/EventBus'
+import { IGroup } from './interface/Group'
+import { defaultGroupOption } from './dataset/constant/Group'
+import { IRangeStyle } from './interface/Listener'
+import { Override } from './core/override/Override'
+import { defaultPageBreakOption } from './dataset/constant/PageBreak'
+import { IPageBreak } from './interface/PageBreak'
+import { LETTER_CLASS } from './dataset/constant/Common'
+import { INTERNAL_CONTEXT_MENU_KEY } from './dataset/constant/ContextMenu'
+import { IRange } from './interface/Range'
+import { deepClone, splitText } from './utils'
+import { IZoneOption } from './interface/Zone'
+import { defaultZoneOption } from './dataset/constant/Zone'
+import { IBackgroundOption } from './interface/Background'
+import { defaultBackground } from './dataset/constant/Background'
+import { BackgroundRepeat, BackgroundSize } from './dataset/enum/Background'
+import { TextDecorationStyle } from './dataset/enum/Text'
+import { ILineBreakOption } from './interface/LineBreak'
+import { defaultLineBreak } from './dataset/constant/LineBreak'
+import { ISeparatorOption } from './interface/Separator'
+import { defaultSeparatorOption } from './dataset/constant/Separator'
+import { ITableOption } from './interface/table/Table'
+import { defaultTableOption } from './dataset/constant/Table'
 
 export default class Editor {
-
   public command: Command
   public listener: Listener
+  public eventBus: EventBus<EventBusMap>
+  public override: Override
   public register: Register
   public destroy: () => void
   public use: UsePlugin
 
-  constructor(container: HTMLDivElement, data: IEditorData | IElement[], options: IEditorOption = {}) {
+  constructor(
+    container: HTMLDivElement,
+    data: IEditorData | IElement[],
+    options: IEditorOption = {}
+  ) {
+    const tableOptions: Required<ITableOption> = {
+      ...defaultTableOption,
+      ...options.table
+    }
     const headerOptions: Required<IHeader> = {
       ...defaultHeaderOption,
       ...options.header
@@ -81,6 +127,10 @@ export default class Editor {
       ...defaultCheckboxOption,
       ...options.checkbox
     }
+    const radioOptions: Required<IRadioOption> = {
+      ...defaultRadioOption,
+      ...options.radio
+    }
     const cursorOptions: Required<ICursorOption> = {
       ...defaultCursorOption,
       ...options.cursor
@@ -93,11 +143,36 @@ export default class Editor {
       ...defaultPlaceholderOption,
       ...options.placeholder
     }
+    const groupOptions: Required<IGroup> = {
+      ...defaultGroupOption,
+      ...options.group
+    }
+    const pageBreakOptions: Required<IPageBreak> = {
+      ...defaultPageBreakOption,
+      ...options.pageBreak
+    }
+    const zoneOptions: Required<IZoneOption> = {
+      ...defaultZoneOption,
+      ...options.zone
+    }
+    const backgroundOptions: Required<IBackgroundOption> = {
+      ...defaultBackground,
+      ...options.background
+    }
+    const lineBreakOptions: Required<ILineBreakOption> = {
+      ...defaultLineBreak,
+      ...options.lineBreak
+    }
+    const separatorOptions: Required<ISeparatorOption> = {
+      ...defaultSeparatorOption,
+      ...options.separator
+    }
 
     const editorOptions: DeepRequired<IEditorOption> = {
       mode: EditorMode.EDIT,
       defaultType: 'TEXT',
-      defaultFont: 'Yahei',
+      defaultColor: '#000000',
+      defaultFont: 'Microsoft YaHei',
       defaultSize: 16,
       minSize: 5,
       maxSize: 72,
@@ -123,24 +198,37 @@ export default class Editor {
       marginIndicatorColor: '#BABABA',
       margins: [100, 120, 100, 120],
       pageMode: PageMode.PAGING,
-      tdPadding: 5,
-      defaultTrMinHeight: 40,
       defaultHyperlinkColor: '#0000FF',
       paperDirection: PaperDirection.VERTICAL,
       inactiveAlpha: 0.6,
       historyMaxRecordCount: 100,
+      wordBreak: WordBreak.BREAK_WORD,
+      printPixelRatio: 3,
+      maskMargin: [0, 0, 0, 0],
+      letterClass: [LETTER_CLASS.ENGLISH],
+      contextMenuDisableKeys: [],
+      scrollContainerSelector: '',
       ...options,
+      table: tableOptions,
       header: headerOptions,
       footer: footerOptions,
       pageNumber: pageNumberOptions,
       watermark: waterMarkOptions,
       control: controlOptions,
       checkbox: checkboxOptions,
+      radio: radioOptions,
       cursor: cursorOptions,
       title: titleOptions,
-      placeholder: placeholderOptions
+      placeholder: placeholderOptions,
+      group: groupOptions,
+      pageBreak: pageBreakOptions,
+      zone: zoneOptions,
+      background: backgroundOptions,
+      lineBreak: lineBreakOptions,
+      separator: separatorOptions
     }
     // 数据处理
+    data = deepClone(data)
     let headerElementList: IElement[] = []
     let mainElementList: IElement[] = []
     let footerElementList: IElement[] = []
@@ -151,14 +239,22 @@ export default class Editor {
       mainElementList = data.main
       footerElementList = data.footer || []
     }
-    [headerElementList, mainElementList, footerElementList]
-      .forEach(elementList => {
-        formatElementList(elementList, {
-          editorOptions
-        })
+    const pageComponentData = [
+      headerElementList,
+      mainElementList,
+      footerElementList
+    ]
+    pageComponentData.forEach(elementList => {
+      formatElementList(elementList, {
+        editorOptions
       })
+    })
     // 监听
     this.listener = new Listener()
+    // 事件
+    this.eventBus = new EventBus<EventBusMap>()
+    // 重写
+    this.override = new Override()
     // 启动
     const draw = new Draw(
       container,
@@ -168,7 +264,9 @@ export default class Editor {
         main: mainElementList,
         footer: footerElementList
       },
-      this.listener
+      this.listener,
+      this.eventBus,
+      this.override
     )
     // 命令
     this.command = new Command(new CommandAdapt(draw))
@@ -192,10 +290,15 @@ export default class Editor {
     const plugin = new Plugin(this)
     this.use = plugin.use.bind(plugin)
   }
-
 }
 
-// 对外对象
+// 对外方法
+export { splitText }
+
+// 对外常量
+export { EDITOR_COMPONENT, LETTER_CLASS, INTERNAL_CONTEXT_MENU_KEY }
+
+// 对外枚举
 export {
   Editor,
   RowFlex,
@@ -205,7 +308,6 @@ export {
   ElementType,
   ControlType,
   EditorComponent,
-  EDITOR_COMPONENT,
   PageMode,
   ImageDisplay,
   Command,
@@ -213,11 +315,18 @@ export {
   BlockType,
   PaperDirection,
   TableBorder,
+  TdBorder,
+  TdSlash,
   MaxHeightRatio,
   NumberType,
   TitleLevel,
   ListType,
-  ListStyle
+  ListStyle,
+  WordBreak,
+  ControlIndentation,
+  BackgroundRepeat,
+  BackgroundSize,
+  TextDecorationStyle
 }
 
 // 对外类型
@@ -233,5 +342,7 @@ export type {
   IBlock,
   ILang,
   ICatalog,
-  ICatalogItem
+  ICatalogItem,
+  IRange,
+  IRangeStyle
 }

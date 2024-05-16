@@ -1,21 +1,46 @@
 import { DeepRequired } from '../../../interface/Common'
 import { IEditorOption } from '../../../interface/Editor'
+import { IElement } from '../../../interface/Element'
 import { IRowElement } from '../../../interface/Row'
 import { Draw } from '../Draw'
 
 export class CheckboxParticle {
-
+  private draw: Draw
   private options: DeepRequired<IEditorOption>
 
   constructor(draw: Draw) {
+    this.draw = draw
     this.options = draw.getOptions()
   }
 
-  public render(ctx: CanvasRenderingContext2D, element: IRowElement, x: number, y: number) {
-    const { checkbox: { gap, lineWidth, fillStyle, fontStyle }, scale } = this.options
+  public setSelect(element: IElement) {
+    const { checkbox } = element
+    if (checkbox) {
+      checkbox.value = !checkbox.value
+    } else {
+      element.checkbox = {
+        value: true
+      }
+    }
+    this.draw.render({
+      isCompute: false,
+      isSetCursor: false
+    })
+  }
+
+  public render(
+    ctx: CanvasRenderingContext2D,
+    element: IRowElement,
+    x: number,
+    y: number
+  ) {
+    const {
+      checkbox: { gap, lineWidth, fillStyle, strokeStyle },
+      scale
+    } = this.options
     const { metrics, checkbox } = element
     // left top 四舍五入避免1像素问题
-    const left = Math.round(x + gap)
+    const left = Math.round(x + gap * scale)
     const top = Math.round(y - metrics.height + lineWidth)
     const width = metrics.width - gap * 2 * scale
     const height = metrics.height
@@ -35,12 +60,11 @@ export class CheckboxParticle {
       ctx.fillRect(left, top, width, height)
       // 勾选对号
       ctx.beginPath()
-      ctx.strokeStyle = fontStyle
-      ctx.lineWidth = lineWidth * 2
-      ctx.moveTo(left + 2 * scale, top + 7 * scale)
-      ctx.lineTo(left + 7 * scale, top + 11 * scale)
-      ctx.moveTo(left + 6.5 * scale, top + 11 * scale)
-      ctx.lineTo(left + 12 * scale, top + 3 * scale)
+      ctx.strokeStyle = strokeStyle
+      ctx.lineWidth = lineWidth * 2 * scale
+      ctx.moveTo(left + 2 * scale, top + height / 2)
+      ctx.lineTo(left + width / 2, top + height - 3 * scale)
+      ctx.lineTo(left + width - 2 * scale, top + 3 * scale)
       ctx.stroke()
     } else {
       ctx.lineWidth = lineWidth
@@ -50,5 +74,4 @@ export class CheckboxParticle {
     ctx.closePath()
     ctx.restore()
   }
-
 }

@@ -1,4 +1,15 @@
-export function printImageBase64(base64List: string[], width: number, height: number) {
+import { PaperDirection } from '../dataset/enum/Editor'
+
+export interface IPrintImageBase64Option {
+  width: number
+  height: number
+  direction?: PaperDirection
+}
+export function printImageBase64(
+  base64List: string[],
+  options: IPrintImageBase64Option
+) {
+  const { width, height, direction = PaperDirection.VERTICAL } = options
   const iframe = document.createElement('iframe')
   // 离屏渲染
   iframe.style.visibility = 'hidden'
@@ -21,17 +32,29 @@ export function printImageBase64(base64List: string[], width: number, height: nu
     container.append(image)
   })
   const style = document.createElement('style')
-  const stylesheet = `*{margin:0;padding:0;}`
+  const stylesheet = `
+  * {
+    margin: 0;
+    padding: 0;
+  }
+  @page {
+    margin: 0;
+    size: ${direction === PaperDirection.HORIZONTAL ? `landscape` : `portrait`};
+  }`
   style.append(document.createTextNode(stylesheet))
   setTimeout(() => {
     doc.write(`${style.outerHTML}${container.innerHTML}`)
     contentWindow.print()
     doc.close()
     // 移除iframe
-    window.addEventListener('mouseover', () => {
-      iframe?.remove()
-    }, {
-      once: true
-    })
+    window.addEventListener(
+      'mouseover',
+      () => {
+        iframe?.remove()
+      },
+      {
+        once: true
+      }
+    )
   })
 }

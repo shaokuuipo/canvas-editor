@@ -1,7 +1,6 @@
 import { Draw } from '../draw/Draw'
 
 export class HistoryManager {
-
   private undoStack: Array<Function> = []
   private redoStack: Array<Function> = []
   private maxRecordCount: number
@@ -47,9 +46,16 @@ export class HistoryManager {
     return !!this.redoStack.length
   }
 
+  public isStackEmpty(): boolean {
+    return !this.undoStack.length && !this.redoStack.length
+  }
+
   public recovery() {
     this.undoStack = []
     this.redoStack = []
   }
 
+  public popUndo() {
+    return this.undoStack.pop()
+  }
 }

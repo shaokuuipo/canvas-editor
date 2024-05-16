@@ -1,4 +1,11 @@
-export type Primitive = string | number | boolean | bigint | symbol | undefined | null
+export type Primitive =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | undefined
+  | null
 
 export type Builtin = Primitive | Function | Date | Error | RegExp
 
@@ -25,5 +32,12 @@ export type DeepRequired<T> = T extends Error
   : Required<T>
 
 export type DeepPartial<T> = {
-  [P in keyof T]?: DeepPartial<T[P]>;
+  [P in keyof T]?: DeepPartial<T[P]>
 }
+
+export type IPadding = [
+  top: number,
+  right: number,
+  bottom: number,
+  left: number
+]

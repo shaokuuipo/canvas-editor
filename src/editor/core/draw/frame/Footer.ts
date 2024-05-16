@@ -8,7 +8,6 @@ import { Position } from '../../position/Position'
 import { Draw } from '../Draw'
 
 export class Footer {
-
   private draw: Draw
   private position: Position
   private options: DeepRequired<IEditorOption>
@@ -17,12 +16,12 @@ export class Footer {
   private rowList: IRow[]
   private positionList: IElementPosition[]
 
-  constructor(draw: Draw) {
+  constructor(draw: Draw, data?: IElement[]) {
     this.draw = draw
     this.position = draw.getPosition()
     this.options = draw.getOptions()
 
-    this.elementList = draw.getFooterElementList()
+    this.elementList = data || []
     this.rowList = []
     this.positionList = []
   }
@@ -56,7 +55,10 @@ export class Footer {
 
   private _computeRowList() {
     const innerWidth = this.draw.getInnerWidth()
-    this.rowList = this.draw.computeRowList(innerWidth, this.elementList)
+    this.rowList = this.draw.computeRowList({
+      innerWidth,
+      elementList: this.elementList
+    })
   }
 
   private _computePositionList() {
@@ -76,18 +78,24 @@ export class Footer {
       startIndex: 0,
       startX,
       startY,
-      innerWidth
+      innerWidth,
+      zone: EditorZone.FOOTER
     })
   }
 
   public getFooterBottom(): number {
-    const { footer: { bottom, disabled }, scale } = this.options
+    const {
+      footer: { bottom, disabled },
+      scale
+    } = this.options
     if (disabled) return 0
     return Math.floor(bottom * scale)
   }
 
   public getMaxHeight(): number {
-    const { footer: { maxHeightRadio } } = this.options
+    const {
+      footer: { maxHeightRadio }
+    } = this.options
     const height = this.draw.getHeight()
     return Math.floor(height * maxHeightRadioMapping[maxHeightRadio])
   }
@@ -136,5 +144,4 @@ export class Footer {
       zone: EditorZone.FOOTER
     })
   }
-
 }

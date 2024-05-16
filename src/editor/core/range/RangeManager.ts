@@ -2,21 +2,31 @@ import { ElementType } from '../..'
 import { ZERO } from '../../dataset/constant/Common'
 import { TEXTLIKE_ELEMENT_TYPE } from '../../dataset/constant/Element'
 import { ControlComponent } from '../../dataset/enum/Control'
+import { EditorContext } from '../../dataset/enum/Editor'
+import { IControlContext } from '../../interface/Control'
 import { IEditorOption } from '../../interface/Editor'
 import { IElement } from '../../interface/Element'
-import { IRange, RangeRowArray, RangeRowMap } from '../../interface/Range'
+import { EventBusMap } from '../../interface/EventBus'
+import { IRangeStyle } from '../../interface/Listener'
+import {
+  IRange,
+  IRangeParagraphInfo,
+  RangeRowArray,
+  RangeRowMap
+} from '../../interface/Range'
 import { getAnchorElement } from '../../utils/element'
 import { Draw } from '../draw/Draw'
+import { EventBus } from '../event/eventbus/EventBus'
 import { HistoryManager } from '../history/HistoryManager'
 import { Listener } from '../listener/Listener'
 import { Position } from '../position/Position'
 
 export class RangeManager {
-
   private draw: Draw
   private options: Required<IEditorOption>
   private range: IRange
   private listener: Listener
+  private eventBus: EventBus<EventBusMap>
   private position: Position
   private historyManager: HistoryManager
 
@@ -24,6 +34,7 @@ export class RangeManager {
     this.draw = draw
     this.options = draw.getOptions()
     this.listener = draw.getListener()
+    this.eventBus = draw.getEventBus()
     this.position = draw.getPosition()
     this.historyManager = draw.getHistoryManager()
     this.range = {
@@ -52,10 +63,37 @@ export class RangeManager {
     return elementList.slice(startIndex + 1, endIndex + 1)
   }
 
+  public getSelectionElementList(): IElement[] | null {
+    if (this.range.isCrossRowCol) {
+      const rowCol = this.draw.getTableParticle().getRangeRowCol()
+      if (!rowCol) return null
+      const elementList: IElement[] = []
+      for (let r = 0; r < rowCol.length; r++) {
+        const row = rowCol[r]
+        for (let c = 0; c < row.length; c++) {
+          const col = row[c]
+          elementList.push(...col.value)
+        }
+      }
+      return elementList
+    }
+    return this.getSelection()
+  }
+
   public getTextLikeSelection(): IElement[] | null {
     const selection = this.getSelection()
     if (!selection) return null
-    return selection.filter(s => !s.type || TEXTLIKE_ELEMENT_TYPE.includes(s.type))
+    return selection.filter(
+      s => !s.type || TEXTLIKE_ELEMENT_TYPE.includes(s.type)
+    )
+  }
+
+  public getTextLikeSelectionElementList(): IElement[] | null {
+    const selection = this.getSelectionElementList()
+    if (!selection) return null
+    return selection.filter(
+      s => !s.type || TEXTLIKE_ELEMENT_TYPE.includes(s.type)
+    )
   }
 
   // 获取光标所选位置行信息
@@ -78,6 +116,31 @@ export class RangeManager {
     return rangeRow
   }
 
+  // 获取光标所选位置元素列表
+  public getRangeRowElementList(): IElement[] | null {
+    const { startIndex, endIndex, isCrossRowCol } = this.range
+    if (!~startIndex && !~endIndex) return null
+    if (isCrossRowCol) {
+      return this.getSelectionElementList()
+    }
+    // 选区行信息
+    const rangeRow = this.getRangeRow()
+    if (!rangeRow) return null
+    const positionList = this.position.getPositionList()
+    const elementList = this.draw.getElementList()
+    // 当前选区所在行
+    const rowElementList: IElement[] = []
+    for (let p = 0; p < positionList.length; p++) {
+      const position = positionList[p]
+      const rowSet = rangeRow.get(position.pageNo)
+      if (!rowSet) continue
+      if (rowSet.has(position.rowNo)) {
+        rowElementList.push(elementList[p])
+      }
+    }
+    return rowElementList
+  }
+
   // 获取选取段落信息
   public getRangeParagraph(): RangeRowArray | null {
     const { startIndex, endIndex } = this.range
@@ -97,10 +160,15 @@ export class RangeManager {
       if (!rowArray.includes(rowNo)) {
         rowArray.unshift(rowNo)
       }
+      const element = elementList[start]
+      const preElement = elementList[start - 1]
       if (
-        positionList[start]?.value === ZERO ||
-        elementList[start].titleId !== elementList[start - 1]?.titleId
-      ) break
+        (element.value === ZERO && !element.listWrap) ||
+        element.listId !== preElement?.listId ||
+        element.titleId !== preElement?.titleId
+      ) {
+        break
+      }
       start--
     }
     // 中间选择
@@ -122,10 +190,15 @@ export class RangeManager {
     // 向下查找
     let end = endIndex
     while (end < positionList.length) {
+      const element = elementList[end]
+      const nextElement = elementList[end + 1]
       if (
-        positionList[end].value === ZERO ||
-        elementList[end].titleId !== elementList[end + 1]?.titleId
-      ) break
+        (element.value === ZERO && !element.listWrap) ||
+        element.listId !== nextElement?.listId ||
+        element.titleId !== nextElement?.titleId
+      ) {
+        break
+      }
       const { pageNo, rowNo } = positionList[end]
       let rowArray = rangeRow.get(pageNo)
       if (!rowArray) {
@@ -140,10 +213,12 @@ export class RangeManager {
     return rangeRow
   }
 
-  // 获取选区元素列表
-  public getRangeElementList(): IElement[] | null {
+  // 获取选区段落信息
+  public getRangeParagraphInfo(): IRangeParagraphInfo | null {
     const { startIndex, endIndex } = this.range
     if (!~startIndex && !~endIndex) return null
+    /// 起始元素位置
+    let startPositionIndex = -1
     // 需要改变的元素列表
     const rangeElementList: IElement[] = []
     // 选区行信息
@@ -156,28 +231,105 @@ export class RangeManager {
       const rowArray = rangeRow.get(position.pageNo)
       if (!rowArray) continue
       if (rowArray.includes(position.rowNo)) {
+        if (!~startPositionIndex) {
+          startPositionIndex = position.index
+        }
         rangeElementList.push(elementList[p])
       }
     }
-    return rangeElementList
+    if (!rangeElementList.length) return null
+    return {
+      elementList: rangeElementList,
+      startIndex: startPositionIndex
+    }
+  }
+
+  // 获取选区段落元素列表
+  public getRangeParagraphElementList(): IElement[] | null {
+    return this.getRangeParagraphInfo()?.elementList || null
   }
 
   public getIsSelectAll() {
     const elementList = this.draw.getElementList()
     const { startIndex, endIndex } = this.range
-    return startIndex === 0 && elementList.length - 1 === endIndex
+    return (
+      startIndex === 0 &&
+      elementList.length - 1 === endIndex &&
+      !this.position.getPositionContext().isTable
+    )
   }
 
   public getIsPointInRange(x: number, y: number): boolean {
     const { startIndex, endIndex } = this.range
     const positionList = this.position.getPositionList()
     for (let p = startIndex + 1; p <= endIndex; p++) {
-      const { coordinate: { leftTop, rightBottom } } = positionList[p]
-      if (x >= leftTop[0] && x <= rightBottom[0] && y >= leftTop[1] && y <= rightBottom[1]) {
+      const position = positionList[p]
+      if (!position) break
+      const {
+        coordinate: { leftTop, rightBottom }
+      } = positionList[p]
+      if (
+        x >= leftTop[0] &&
+        x <= rightBottom[0] &&
+        y >= leftTop[1] &&
+        y <= rightBottom[1]
+      ) {
         return true
       }
     }
     return false
+  }
+
+  public getKeywordRangeList(payload: string): IRange[] {
+    const searchMatchList = this.draw
+      .getSearch()
+      .getMatchList(payload, this.draw.getOriginalElementList())
+    const searchRangeMap: Map<string, IRange> = new Map()
+    for (const searchMatch of searchMatchList) {
+      const searchRange = searchRangeMap.get(searchMatch.groupId)
+      if (searchRange) {
+        searchRange.endIndex += 1
+      } else {
+        const { type, groupId, tableId, index, tdIndex, trIndex } = searchMatch
+        const range: IRange = {
+          startIndex: index - 1,
+          endIndex: index
+        }
+        if (type === EditorContext.TABLE) {
+          range.tableId = tableId
+          range.startTdIndex = tdIndex
+          range.endTdIndex = tdIndex
+          range.startTrIndex = trIndex
+          range.endTrIndex = trIndex
+        }
+        searchRangeMap.set(groupId, range)
+      }
+    }
+    const rangeList: IRange[] = []
+    searchRangeMap.forEach(searchRange => {
+      rangeList.push(searchRange)
+    })
+    return rangeList
+  }
+
+  public getIsCanInput(): boolean {
+    const { startIndex, endIndex } = this.getRange()
+    if (!~startIndex && !~endIndex) return false
+    if (startIndex === endIndex) return true
+    const elementList = this.draw.getElementList()
+    const startElement = elementList[startIndex]
+    const endElement = elementList[endIndex]
+    // 选区前后不是控件 || 选区前不是控件或是后缀&&选区后不是控件或是后缀 || 选区在控件内
+    return (
+      (!startElement.controlId && !endElement.controlId) ||
+      ((!startElement.controlId ||
+        startElement.controlComponent === ControlComponent.POSTFIX) &&
+        (!endElement.controlId ||
+          endElement.controlComponent === ControlComponent.POSTFIX)) ||
+      (!!startElement.controlId &&
+        endElement.controlId === startElement.controlId &&
+        endElement.controlComponent !== ControlComponent.POSTFIX)
+    )
   }
 
   public setRange(
@@ -196,14 +348,19 @@ export class RangeManager {
     this.range.endTdIndex = endTdIndex
     this.range.startTrIndex = startTrIndex
     this.range.endTrIndex = endTrIndex
-    this.range.isCrossRowCol = !!(startTdIndex || endTdIndex || startTrIndex || endTrIndex)
+    this.range.isCrossRowCol = !!(
+      startTdIndex ||
+      endTdIndex ||
+      startTrIndex ||
+      endTrIndex
+    )
     this.range.zone = this.draw.getZone().getZone()
     // 激活控件
     const control = this.draw.getControl()
     if (~startIndex && ~endIndex) {
       const elementList = this.draw.getElementList()
       const element = elementList[startIndex]
-      if (element?.type === ElementType.CONTROL) {
+      if (element?.controlId) {
         control.initControl()
         return
       }
@@ -224,7 +381,10 @@ export class RangeManager {
   }
 
   public setRangeStyle() {
-    if (!this.listener.rangeStyleChange) return
+    const rangeStyleChangeListener = this.listener.rangeStyleChange
+    const isSubscribeRangeStyleChange =
+      this.eventBus.isSubscribe('rangeStyleChange')
+    if (!rangeStyleChangeListener && !isSubscribeRangeStyleChange) return
     // 结束光标位置
     const { startIndex, endIndex, isCrossRowCol } = this.range
     if (!~startIndex && !~endIndex) return
@@ -250,7 +410,9 @@ export class RangeManager {
     const size = curElement.size || this.options.defaultSize
     const bold = !~curElementList.findIndex(el => !el.bold)
     const italic = !~curElementList.findIndex(el => !el.italic)
-    const underline = !~curElementList.findIndex(el => !el.underline)
+    const underline = !~curElementList.findIndex(
+      el => !el.underline && !el.control?.underline
+    )
     const strikeout = !~curElementList.findIndex(el => !el.strikeout)
     const color = curElement.color || null
     const highlight = curElement.highlight || null
@@ -260,11 +422,16 @@ export class RangeManager {
     const level = curElement.level || null
     const listType = curElement.listType || null
     const listStyle = curElement.listStyle || null
+    const textDecoration = underline ? curElement.textDecoration || null : null
     // 菜单
     const painter = !!this.draw.getPainterStyle()
     const undo = this.historyManager.isCanUndo()
     const redo = this.historyManager.isCanRedo()
-    this.listener.rangeStyleChange({
+    // 组信息
+    const groupIds = curElement.groupIds || null
+    // 扩展字段
+    const extension = curElement.extension ?? null
+    const rangeStyle: IRangeStyle = {
       type,
       undo,
       redo,
@@ -282,19 +449,31 @@ export class RangeManager {
       dashArray,
       level,
       listType,
-      listStyle
-    })
+      listStyle,
+      groupIds,
+      textDecoration,
+      extension
+    }
+    if (rangeStyleChangeListener) {
+      rangeStyleChangeListener(rangeStyle)
+    }
+    if (isSubscribeRangeStyleChange) {
+      this.eventBus.emit('rangeStyleChange', rangeStyle)
+    }
   }
 
   public recoveryRangeStyle() {
-    if (!this.listener.rangeStyleChange) return
+    const rangeStyleChangeListener = this.listener.rangeStyleChange
+    const isSubscribeRangeStyleChange =
+      this.eventBus.isSubscribe('rangeStyleChange')
+    if (!rangeStyleChangeListener && !isSubscribeRangeStyleChange) return
     const font = this.options.defaultFont
     const size = this.options.defaultSize
     const rowMargin = this.options.defaultRowMargin
     const painter = !!this.draw.getPainterStyle()
     const undo = this.historyManager.isCanUndo()
     const redo = this.historyManager.isCanRedo()
-    this.listener.rangeStyleChange({
+    const rangeStyle: IRangeStyle = {
       type: null,
       undo,
       redo,
@@ -312,14 +491,24 @@ export class RangeManager {
       dashArray: [],
       level: null,
       listType: null,
-      listStyle: null
-    })
+      listStyle: null,
+      groupIds: null,
+      textDecoration: null,
+      extension: null
+    }
+    if (rangeStyleChangeListener) {
+      rangeStyleChangeListener(rangeStyle)
+    }
+    if (isSubscribeRangeStyleChange) {
+      this.eventBus.emit('rangeStyleChange', rangeStyle)
+    }
   }
 
-  public shrinkBoundary() {
-    const elementList = this.draw.getElementList()
-    const range = this.getRange()
+  public shrinkBoundary(context: IControlContext = {}) {
+    const elementList = context.elementList || this.draw.getElementList()
+    const range = context.range || this.getRange()
     const { startIndex, endIndex } = range
+    if (!~startIndex && !~endIndex) return
     const startElement = elementList[startIndex]
     const endElement = elementList[endIndex]
     if (startIndex === endIndex) {
@@ -349,8 +538,8 @@ export class RangeManager {
         while (index > 0) {
           const preElement = elementList[index]
           if (
-            preElement.controlId !== endElement.controlId
-            || preElement.controlComponent === ControlComponent.PREFIX
+            preElement.controlId !== endElement.controlId ||
+            preElement.controlComponent === ControlComponent.PREFIX
           ) {
             range.startIndex = index
             range.endIndex = index
@@ -365,12 +554,14 @@ export class RangeManager {
         while (index < elementList.length) {
           const nextElement = elementList[index]
           if (
-            nextElement.controlId !== startElement.controlId
-            || nextElement.controlComponent === ControlComponent.VALUE
+            nextElement.controlId !== startElement.controlId ||
+            nextElement.controlComponent === ControlComponent.VALUE
           ) {
             range.startIndex = index - 1
             break
-          } else if (nextElement.controlComponent === ControlComponent.PLACEHOLDER) {
+          } else if (
+            nextElement.controlComponent === ControlComponent.PLACEHOLDER
+          ) {
             range.startIndex = index - 1
             range.endIndex = index - 1
             return
@@ -384,12 +575,14 @@ export class RangeManager {
         while (index > 0) {
           const preElement = elementList[index]
           if (
-            preElement.controlId !== startElement.controlId
-            || preElement.controlComponent === ControlComponent.VALUE
+            preElement.controlId !== startElement.controlId ||
+            preElement.controlComponent === ControlComponent.VALUE
           ) {
             range.startIndex = index
             break
-          } else if (preElement.controlComponent === ControlComponent.PLACEHOLDER) {
+          } else if (
+            preElement.controlComponent === ControlComponent.PLACEHOLDER
+          ) {
             range.startIndex = index
             range.endIndex = index
             return
@@ -400,7 +593,13 @@ export class RangeManager {
     }
   }
 
-  public render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
+  public render(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) {
     ctx.save()
     ctx.globalAlpha = this.options.rangeAlpha
     ctx.fillStyle = this.options.rangeColor
@@ -409,11 +608,11 @@ export class RangeManager {
   }
 
   public toString(): string {
-    const selection = this.getSelection()
+    const selection = this.getTextLikeSelection()
     if (!selection) return ''
-    return selection.map(s => s.value)
+    return selection
+      .map(s => s.value)
       .join('')
       .replace(new RegExp(ZERO, 'g'), '')
   }
-
 }

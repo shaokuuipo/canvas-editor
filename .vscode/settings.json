@@ -10,16 +10,22 @@
     "CRDT",
     "deletable",
     "dppx",
+    "esbenp",
+    "eventbus",
     "inputarea",
+    "keyof",
     "linebreak",
     "noopener",
+    "Parens",
     "prismjs",
     "resizer",
     "richtext",
     "rowmargin",
     "rowspan",
+    "srcdoc",
     "TEXTLIKE",
     "trlist",
+    "updown",
     "vite",
     "vitepress",
     "Yahei"
@@ -33,6 +39,15 @@
   ],
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
+    "source.fixAll.eslint": "explicit"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }

@@ -21,7 +21,9 @@
       "textWrap": "Text wrap",
       "textWrapType": {
         "embed": "Embed",
-        "upDown": "Up down"
+        "upDown": "Up down",
+        "floatTop": "Float above text",
+        "floatBottom": "Float below text"
       }
     },
     "table": {
@@ -43,7 +45,14 @@
       "border": "Table border",
       "borderAll": "All",
       "borderEmpty": "Empty",
-      "borderExternal": "External"
+      "borderExternal": "External",
+      "borderTd": "Table cell border",
+      "borderTdTop": "Top",
+      "borderTdRight": "Right",
+      "borderTdBottom": "Bottom",
+      "borderTdLeft": "Left",
+      "borderTdForward": "Forward",
+      "borderTdBack": "Back"
     }
   },
   "datePicker": {
@@ -69,5 +78,12 @@
   "frame": {
     "header": "Header",
     "footer": "Footer"
+  },
+  "pageBreak": {
+    "displayName": "Page Break"
+  },
+  "zone": {
+    "headerTip": "Double click to edit header",
+    "footerTip": "Double click to edit footer"
   }
 }

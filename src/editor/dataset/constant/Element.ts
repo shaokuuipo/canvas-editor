@@ -1,5 +1,7 @@
 import { ElementType } from '../enum/Element'
 import { IElement } from '../../interface/Element'
+import { ITd } from '../../interface/table/Td'
+import { IControlStyle } from '../../interface/Control'
 
 export const EDITOR_ELEMENT_STYLE_ATTR: Array<keyof IElement> = [
   'bold',
@@ -9,8 +11,11 @@ export const EDITOR_ELEMENT_STYLE_ATTR: Array<keyof IElement> = [
   'size',
   'italic',
   'underline',
-  'strikeout'
+  'strikeout',
+  'textDecoration'
 ]
+
+export const EDITOR_ROW_ATTR: Array<keyof IElement> = ['rowFlex', 'rowMargin']
 
 export const EDITOR_ELEMENT_COPY_ATTR: Array<keyof IElement> = [
   'type',
@@ -26,7 +31,11 @@ export const EDITOR_ELEMENT_COPY_ATTR: Array<keyof IElement> = [
   'url',
   'hyperlinkId',
   'dateId',
-  'dateFormat'
+  'dateFormat',
+  'groupIds',
+  'rowFlex',
+  'rowMargin',
+  'textDecoration'
 ]
 
 export const EDITOR_ELEMENT_ZIP_ATTR: Array<keyof IElement> = [
@@ -51,12 +60,27 @@ export const EDITOR_ELEMENT_ZIP_ATTR: Array<keyof IElement> = [
   'valueList',
   'control',
   'checkbox',
+  'radio',
   'dateFormat',
   'block',
   'level',
+  'title',
   'listType',
   'listStyle',
-  'listWrap'
+  'listWrap',
+  'groupIds',
+  'conceptId',
+  'imgDisplay',
+  'imgFloatPosition',
+  'textDecoration',
+  'extension'
+]
+
+export const TABLE_TD_ZIP_ATTR: Array<keyof ITd> = [
+  'verticalAlign',
+  'backgroundColor',
+  'borderTypes',
+  'slashTypes'
 ]
 
 export const TABLE_CONTEXT_ATTR: Array<keyof IElement> = [
@@ -68,12 +92,28 @@ export const TABLE_CONTEXT_ATTR: Array<keyof IElement> = [
 export const TITLE_CONTEXT_ATTR: Array<keyof IElement> = [
   'level',
   'titleId',
+  'title'
 ]
 
 export const LIST_CONTEXT_ATTR: Array<keyof IElement> = [
   'listId',
   'listType',
   'listStyle'
+]
+
+export const CONTROL_CONTEXT_ATTR: Array<keyof IElement> = [
+  'control',
+  'controlId',
+  'controlComponent'
+]
+
+export const CONTROL_STYLE_ATTR: Array<keyof IControlStyle> = [
+  'font',
+  'size',
+  'bold',
+  'highlight',
+  'italic',
+  'strikeout'
 ]
 
 export const EDITOR_ELEMENT_CONTEXT_ATTR: Array<keyof IElement> = [
@@ -91,6 +131,11 @@ export const TEXTLIKE_ELEMENT_TYPE: ElementType[] = [
   ElementType.DATE
 ]
 
+export const IMAGE_ELEMENT_TYPE: ElementType[] = [
+  ElementType.IMAGE,
+  ElementType.LATEX
+]
+
 export const INLINE_ELEMENT_TYPE: ElementType[] = [
   ElementType.BLOCK,
   ElementType.PAGE_BREAK,
@@ -98,12 +143,7 @@ export const INLINE_ELEMENT_TYPE: ElementType[] = [
   ElementType.TABLE
 ]
 
-export const INLINE_NODE_NAME: string[] = [
-  'HR',
-  'TABLE',
-  'UL',
-  'OL'
-]
+export const INLINE_NODE_NAME: string[] = ['HR', 'TABLE', 'UL', 'OL']
 
 export const VIRTUAL_ELEMENT_TYPE: ElementType[] = [
   ElementType.TITLE,

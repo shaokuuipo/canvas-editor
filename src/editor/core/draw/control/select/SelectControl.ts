@@ -1,15 +1,26 @@
-import { EDITOR_COMPONENT, EDITOR_PREFIX } from '../../../../dataset/constant/Editor'
+import {
+  EDITOR_COMPONENT,
+  EDITOR_PREFIX
+} from '../../../../dataset/constant/Editor'
+import {
+  CONTROL_STYLE_ATTR,
+  EDITOR_ELEMENT_STYLE_ATTR
+} from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
 import { EditorComponent } from '../../../../dataset/enum/Editor'
+import { ElementType } from '../../../../dataset/enum/Element'
 import { KeyMap } from '../../../../dataset/enum/KeyMap'
-import { IControlInstance } from '../../../../interface/Control'
+import {
+  IControlContext,
+  IControlInstance,
+  IControlRuleOption
+} from '../../../../interface/Control'
 import { IElement } from '../../../../interface/Element'
-import { splitText } from '../../../../utils'
+import { omitObject, pickObject, splitText } from '../../../../utils'
 import { formatElementContext } from '../../../../utils/element'
 import { Control } from '../Control'
 
 export class SelectControl implements IControlInstance {
-
   private element: IElement
   private control: Control
   private isPopup: boolean
@@ -30,9 +41,9 @@ export class SelectControl implements IControlInstance {
     return this.element.control?.code || null
   }
 
-  public getValue(): IElement[] {
-    const elementList = this.control.getElementList()
-    const { startIndex } = this.control.getRange()
+  public getValue(context: IControlContext = {}): IElement[] {
+    const elementList = context.elementList || this.control.getElementList()
+    const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
     const data: IElement[] = []
     // 向左查找
@@ -72,7 +83,10 @@ export class SelectControl implements IControlInstance {
     return -1
   }
 
-  public keydown(evt: KeyboardEvent): number {
+  public keydown(evt: KeyboardEvent): number | null {
+    if (this.control.getIsDisabledControl()) {
+      return null
+    }
     const elementList = this.control.getElementList()
     const range = this.control.getRange()
     // 收缩边界到Value内
@@ -105,8 +119,9 @@ export class SelectControl implements IControlInstance {
         return this.clearSelect()
       } else {
         const endNextElement = elementList[endIndex + 1]
-        if ((startElement.controlComponent === ControlComponent.PREFIX &&
-          endNextElement.controlComponent === ControlComponent.PLACEHOLDER) ||
+        if (
+          (startElement.controlComponent === ControlComponent.PREFIX &&
+            endNextElement.controlComponent === ControlComponent.PLACEHOLDER) ||
           endNextElement.controlComponent === ControlComponent.POSTFIX ||
           startElement.controlComponent === ControlComponent.PLACEHOLDER
         ) {
@@ -122,6 +137,9 @@ export class SelectControl implements IControlInstance {
   }
 
   public cut(): number {
+    if (this.control.getIsDisabledControl()) {
+      return -1
+    }
     this.control.shrinkBoundary()
     const { startIndex, endIndex } = this.control.getRange()
     if (startIndex === endIndex) {
@@ -131,9 +149,16 @@ export class SelectControl implements IControlInstance {
     return this.clearSelect()
   }
 
-  public clearSelect(): number {
-    const elementList = this.control.getElementList()
-    const { startIndex } = this.control.getRange()
+  public clearSelect(
+    context: IControlContext = {},
+    options: IControlRuleOption = {}
+  ): number {
+    // 校验是否可以设置
+    if (!options.isIgnoreDisabledRule && this.control.getIsDisabledControl()) {
+      return -1
+    }
+    const elementList = context.elementList || this.control.getElementList()
+    const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
     let leftIndex = -1
     let rightIndex = -1
@@ -168,42 +193,64 @@ export class SelectControl implements IControlInstance {
     const draw = this.control.getDraw()
     draw.spliceElementList(elementList, leftIndex + 1, rightIndex - leftIndex)
     // 增加占位符
-    this.control.addPlaceholder(preIndex)
+    this.control.addPlaceholder(preIndex, context)
     this.element.control!.code = null
     return preIndex
   }
 
-  public setSelect(code: string) {
+  public setSelect(
+    code: string,
+    context: IControlContext = {},
+    options: IControlRuleOption = {}
+  ) {
+    // 校验是否可以设置
+    if (!options.isIgnoreDisabledRule && this.control.getIsDisabledControl()) {
+      return
+    }
     const control = this.element.control!
     const valueSets = control.valueSets
     if (!Array.isArray(valueSets) || !valueSets.length) return
     // 转换code
     const valueSet = valueSets.find(v => v.code === code)
     if (!valueSet) return
+    const elementList = context.elementList || this.control.getElementList()
+    const range = context.range || this.control.getRange()
+    // 样式赋值元素-默认值的第一个字符样式，否则取默认样式
+    const valueElement = this.getValue(context)[0]
+    const styleElement = valueElement
+      ? pickObject(valueElement, EDITOR_ELEMENT_STYLE_ATTR)
+      : pickObject(elementList[range.startIndex], CONTROL_STYLE_ATTR)
     // 清空选项
-    const startIndex = this.clearSelect()
-    this.control.removePlaceholder(startIndex)
-    // 插入
-    const elementList = this.control.getElementList()
-    const startElement = elementList[startIndex]
-    const start = startIndex + 1
+    const prefixIndex = this.clearSelect(context)
+    if (!~prefixIndex) return
+    this.control.removePlaceholder(prefixIndex, context)
+    // 属性赋值元素-默认为前缀属性
+    const propertyElement = omitObject(
+      elementList[prefixIndex],
+      EDITOR_ELEMENT_STYLE_ATTR
+    )
+    const start = prefixIndex + 1
     const data = splitText(valueSet.value)
     const draw = this.control.getDraw()
     for (let i = 0; i < data.length; i++) {
       const newElement: IElement = {
-        ...startElement,
+        ...styleElement,
+        ...propertyElement,
+        type: ElementType.TEXT,
         value: data[i],
         controlComponent: ControlComponent.VALUE
       }
-      formatElementContext(elementList, [newElement], startIndex)
+      formatElementContext(elementList, [newElement], prefixIndex)
       draw.spliceElementList(elementList, start + i, 0, newElement)
     }
-    // render
-    const newIndex = start + data.length - 1
-    this.control.repaintControl(newIndex)
     // 设置状态
     this.element.control!.code = code
-    this.destroy()
+    // 重新渲染控件
+    if (!context.range) {
+      const newIndex = start + data.length - 1
+      this.control.repaintControl(newIndex)
+      this.destroy()
+    }
   }
 
   private _createSelectPopupDom() {
@@ -232,7 +279,12 @@ export class SelectControl implements IControlInstance {
     }
     selectPopupContainer.append(ul)
     // 定位
-    const { coordinate: { leftTop: [left, top] }, lineHeight } = position
+    const {
+      coordinate: {
+        leftTop: [left, top]
+      },
+      lineHeight
+    } = position
     const preY = this.control.getPreY()
     selectPopupContainer.style.left = `${left}px`
     selectPopupContainer.style.top = `${top + preY + lineHeight}px`
@@ -243,10 +295,12 @@ export class SelectControl implements IControlInstance {
   }
 
   public awake() {
-    if (this.isPopup) return
+    if (this.isPopup || this.control.getIsDisabledControl()) return
     const { startIndex } = this.control.getRange()
     const elementList = this.control.getElementList()
-    if (elementList[startIndex + 1]?.controlId !== this.element.controlId) return
+    if (elementList[startIndex + 1]?.controlId !== this.element.controlId) {
+      return
+    }
     this._createSelectPopupDom()
     this.isPopup = true
   }
@@ -256,5 +310,4 @@ export class SelectControl implements IControlInstance {
     this.selectDom?.remove()
     this.isPopup = false
   }
-
 }

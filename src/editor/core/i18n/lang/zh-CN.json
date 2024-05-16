@@ -21,7 +21,9 @@
       "textWrap": "文字环绕",
       "textWrapType": {
         "embed": "嵌入型",
-        "upDown": "上下型环绕"
+        "upDown": "上下型环绕",
+        "floatTop": "浮于文字上方",
+        "floatBottom": "衬于文字下方"
       }
     },
     "table": {
@@ -43,7 +45,14 @@
       "border": "表格边框",
       "borderAll": "所有框线",
       "borderEmpty": "无框线",
-      "borderExternal": "外侧框线"
+      "borderExternal": "外侧框线",
+      "borderTd": "单元格边框",
+      "borderTdTop": "上边框",
+      "borderTdRight": "右边框",
+      "borderTdBottom": "下边框",
+      "borderTdLeft": "左边框",
+      "borderTdForward": "正斜线",
+      "borderTdBack": "反斜线"
     }
   },
   "datePicker": {
@@ -69,5 +78,12 @@
   "frame": {
     "header": "页眉",
     "footer": "页脚"
+  },
+  "pageBreak": {
+    "displayName": "分页符"
+  },
+  "zone": {
+    "headerTip": "双击编辑页眉",
+    "footerTip": "双击编辑页脚"
   }
 }
