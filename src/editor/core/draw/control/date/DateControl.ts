@@ -1,8 +1,10 @@
 import {
   CONTROL_STYLE_ATTR,
+  EDITOR_ELEMENT_STYLE_ATTR,
   TEXTLIKE_ELEMENT_TYPE
 } from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
+import { ElementType } from '../../../../dataset/enum/Element'
 import { KeyMap } from '../../../../dataset/enum/KeyMap'
 import {
   IControlContext,
@@ -12,15 +14,24 @@ import {
 import { IElement } from '../../../../interface/Element'
 import { omitObject, pickObject } from '../../../../utils'
 import { formatElementContext } from '../../../../utils/element'
+import { Draw } from '../../Draw'
+import { DatePicker } from '../../particle/date/DatePicker'
 import { Control } from '../Control'
 
-export class TextControl implements IControlInstance {
+export class DateControl implements IControlInstance {
+  private draw: Draw
   private element: IElement
   private control: Control
+  private isPopup: boolean
+  private datePicker: DatePicker | null
 
   constructor(element: IElement, control: Control) {
+    const draw = control.getDraw()
+    this.draw = draw
     this.element = element
     this.control = control
+    this.isPopup = false
+    this.datePicker = null
   }
 
   public setElement(element: IElement) {
@@ -31,11 +42,14 @@ export class TextControl implements IControlInstance {
     return this.element
   }
 
-  public getValue(context: IControlContext = {}): IElement[] {
+  public getIsPopup(): boolean {
+    return this.isPopup
+  }
+
+  public getValueRange(context: IControlContext = {}): [number, number] | null {
     const elementList = context.elementList || this.control.getElementList()
     const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
-    const data: IElement[] = []
     // 向左查找
     let preIndex = startIndex
     while (preIndex > 0) {
@@ -45,9 +59,6 @@ export class TextControl implements IControlInstance {
         preElement.controlComponent === ControlComponent.PREFIX
       ) {
         break
-      }
-      if (preElement.controlComponent === ControlComponent.VALUE) {
-        data.unshift(preElement)
       }
       preIndex--
     }
@@ -61,10 +72,23 @@ export class TextControl implements IControlInstance {
       ) {
         break
       }
-      if (nextElement.controlComponent === ControlComponent.VALUE) {
-        data.push(nextElement)
-      }
       nextIndex++
+    }
+    if (preIndex === nextIndex) return null
+    return [preIndex, nextIndex - 1]
+  }
+
+  public getValue(context: IControlContext = {}): IElement[] {
+    const elementList = context.elementList || this.control.getElementList()
+    const range = this.getValueRange(context)
+    if (!range) return []
+    const data: IElement[] = []
+    const [startIndex, endIndex] = range
+    for (let i = startIndex; i <= endIndex; i++) {
+      const element = elementList[i]
+      if (element.controlComponent === ControlComponent.VALUE) {
+        data.push(element)
+      }
     }
     return data
   }
@@ -117,25 +141,77 @@ export class TextControl implements IControlInstance {
     return start + data.length - 1
   }
 
-  public clearValue(
+  public clearSelect(
     context: IControlContext = {},
     options: IControlRuleOption = {}
   ): number {
+    const { isIgnoreDisabledRule = false, isAddPlaceholder = true } = options
+    // 校验是否可以设置
+    if (!isIgnoreDisabledRule && this.control.getIsDisabledControl()) {
+      return -1
+    }
+    const range = this.getValueRange(context)
+    if (!range) return -1
+    const [leftIndex, rightIndex] = range
+    if (!~leftIndex || !~rightIndex) return -1
+    const elementList = context.elementList || this.control.getElementList()
+    // 删除元素
+    const draw = this.control.getDraw()
+    draw.spliceElementList(elementList, leftIndex + 1, rightIndex - leftIndex)
+    // 增加占位符
+    if (isAddPlaceholder) {
+      this.control.addPlaceholder(leftIndex, context)
+    }
+    return leftIndex
+  }
+
+  public setSelect(
+    date: string,
+    context: IControlContext = {},
+    options: IControlRuleOption = {}
+  ) {
     // 校验是否可以设置
     if (!options.isIgnoreDisabledRule && this.control.getIsDisabledControl()) {
-      return -1
+      return
     }
     const elementList = context.elementList || this.control.getElementList()
     const range = context.range || this.control.getRange()
-    const { startIndex, endIndex } = range
-    this.control
-      .getDraw()
-      .spliceElementList(elementList, startIndex + 1, endIndex - startIndex)
-    const value = this.getValue(context)
-    if (!value.length) {
-      this.control.addPlaceholder(startIndex)
+    // 样式赋值元素-默认值的第一个字符样式，否则取默认样式
+    const valueElement = this.getValue(context)[0]
+    const styleElement = valueElement
+      ? pickObject(valueElement, EDITOR_ELEMENT_STYLE_ATTR)
+      : pickObject(elementList[range.startIndex], CONTROL_STYLE_ATTR)
+    // 清空选项
+    const prefixIndex = this.clearSelect(context, {
+      isAddPlaceholder: false
+    })
+    if (!~prefixIndex) return
+    // 属性赋值元素-默认为前缀属性
+    const propertyElement = omitObject(
+      elementList[prefixIndex],
+      EDITOR_ELEMENT_STYLE_ATTR
+    )
+    const start = prefixIndex + 1
+    const draw = this.control.getDraw()
+    for (let i = 0; i < date.length; i++) {
+      const newElement: IElement = {
+        ...styleElement,
+        ...propertyElement,
+        type: ElementType.TEXT,
+        value: date[i],
+        controlComponent: ControlComponent.VALUE
+      }
+      formatElementContext(elementList, [newElement], prefixIndex)
+      draw.spliceElementList(elementList, start + i, 0, newElement)
     }
-    return startIndex
+    // 重新渲染控件
+    if (!context.range) {
+      const newIndex = start + date.length - 1
+      this.control.repaintControl({
+        curIndex: newIndex
+      })
+      this.destroy()
+    }
   }
 
   public keydown(evt: KeyboardEvent): number | null {
@@ -236,5 +312,47 @@ export class TextControl implements IControlInstance {
       this.control.addPlaceholder(startIndex)
     }
     return startIndex
+  }
+
+  public awake() {
+    if (this.isPopup || this.control.getIsDisabledControl()) return
+    const position = this.control.getPosition()
+    if (!position) return
+    const elementList = this.draw.getElementList()
+    const { startIndex } = this.control.getRange()
+    if (elementList[startIndex + 1]?.controlId !== this.element.controlId) {
+      return
+    }
+    // 渲染日期控件
+    this.datePicker = new DatePicker(this.draw, {
+      onSubmit: this._setDate.bind(this)
+    })
+    const value =
+      this.getValue()
+        .map(el => el.value)
+        .join('') || ''
+    const dateFormat = this.element.control?.dateFormat
+    this.datePicker.render({
+      value,
+      position,
+      dateFormat
+    })
+    // 弹窗状态
+    this.isPopup = true
+  }
+
+  public destroy() {
+    if (!this.isPopup) return
+    this.datePicker?.destroy()
+    this.isPopup = false
+  }
+
+  private _setDate(date: string) {
+    if (!date) {
+      this.clearSelect()
+    } else {
+      this.setSelect(date)
+    }
+    this.destroy()
   }
 }

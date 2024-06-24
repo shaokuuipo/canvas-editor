@@ -19,6 +19,7 @@ export interface IElementBasic {
   type?: ElementType
   value: string
   extension?: unknown
+  externalId?: string
 }
 
 export interface IElementStyle {
@@ -172,4 +173,9 @@ export interface IElementFillRect {
   y: number
   width: number
   height: number
+}
+
+export interface IUpdateElementByIdOption {
+  id: string
+  properties: Omit<IElement, 'id'>
 }

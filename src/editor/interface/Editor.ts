@@ -91,11 +91,8 @@ export interface IEditorOption {
 
 export interface IEditorResult {
   version: string
-  width: number
-  height: number
-  margins: IMargin
-  watermark?: IWatermark
   data: IEditorData
+  options: IEditorOption
 }
 
 export interface IEditorHTML {
@@ -105,3 +102,16 @@ export interface IEditorHTML {
 }
 
 export type IEditorText = IEditorHTML
+
+export type IUpdateOption = Omit<
+  IEditorOption,
+  | 'mode'
+  | 'width'
+  | 'height'
+  | 'scale'
+  | 'pageGap'
+  | 'pageMode'
+  | 'paperDirection'
+  | 'historyMaxRecordCount'
+  | 'scrollContainerSelector'
+>

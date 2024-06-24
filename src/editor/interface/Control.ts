@@ -1,8 +1,9 @@
 import { ControlType, ControlIndentation } from '../dataset/enum/Control'
 import { EditorZone } from '../dataset/enum/Editor'
-import { ICheckbox } from './Checkbox'
+import { MoveDirection } from '../dataset/enum/Observer'
+import { IDrawOption } from './Draw'
 import { IElement } from './Element'
-import { IRadio } from './Radio'
+import { IPositionContext } from './Position'
 import { IRange } from './Range'
 
 export interface IValueSet {
@@ -20,13 +21,15 @@ export interface IControlCheckbox {
   min?: number
   max?: number
   valueSets: IValueSet[]
-  checkbox?: ICheckbox
 }
 
 export interface IControlRadio {
   code: string | null
   valueSets: IValueSet[]
-  radio?: IRadio
+}
+
+export interface IControlDate {
+  dateFormat?: string
 }
 
 export interface IControlHighlightRule {
@@ -70,10 +73,11 @@ export interface IControlStyle {
 
 export type IControl = IControlBasic &
   IControlRule &
+  Partial<IControlStyle> &
   Partial<IControlSelect> &
   Partial<IControlCheckbox> &
   Partial<IControlRadio> &
-  Partial<IControlStyle>
+  Partial<IControlDate>
 
 export interface IControlOption {
   placeholderColor?: string
@@ -97,18 +101,15 @@ export interface IControlInitResult {
 }
 
 export interface IControlInstance {
+  setElement(element: IElement): void
   getElement(): IElement
-
   getValue(): IElement[]
-
   setValue(
     data: IElement[],
     context?: IControlContext,
     options?: IControlRuleOption
   ): number
-
   keydown(evt: KeyboardEvent): number | null
-
   cut(): number
 }
 
@@ -119,6 +120,7 @@ export interface IControlContext {
 
 export interface IControlRuleOption {
   isIgnoreDisabledRule?: boolean // 忽略禁用校验规则
+  isAddPlaceholder?: boolean // 是否添加占位符
 }
 
 export interface IGetControlValueOption {
@@ -146,4 +148,18 @@ export type ISetControlHighlightOption = IControlHighlight[]
 export type ISetControlProperties = {
   conceptId: string
   properties: Partial<Omit<IControl, 'value'>>
+}
+
+export type IRepaintControlOption = Pick<
+  IDrawOption,
+  'curIndex' | 'isCompute' | 'isSubmitHistory'
+>
+
+export interface INextControlContext {
+  positionContext: IPositionContext
+  nextIndex: number
+}
+
+export interface IInitNextControlOption {
+  direction?: MoveDirection
 }

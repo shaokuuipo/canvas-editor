@@ -772,6 +772,16 @@ Usage:
 instance.command.executeAppendElementList(elementList: IElement[], options?: IAppendElementListOption)
 ```
 
+## executeUpdateElementById
+
+Feature: Update element by id
+
+Usage:
+
+```javascript
+instance.command.executeUpdateElementById(payload: IUpdateElementByIdOption)
+```
+
 ## executeSetValue
 
 Feature: Set the editor data
@@ -910,4 +920,34 @@ Usage:
 
 ```javascript
 instance.command.executeSetControlHighlight(payload: ISetControlHighlightOption)
+```
+
+## executeLocationControl
+
+Feature: Positioning and activating control
+
+Usage:
+
+```javascript
+instance.command.executeLocationControl(controlId: string)
+```
+
+## executeUpdateOptions
+
+Feature: Update options
+
+Usage:
+
+```javascript
+instance.command.executeUpdateOptions(payload: IUpdateOption)
+```
+
+## executeInsertTitle
+
+Feature: Insert title
+
+Usage:
+
+```javascript
+instance.command.executeInsertTitle(payload: IElement)
 ```

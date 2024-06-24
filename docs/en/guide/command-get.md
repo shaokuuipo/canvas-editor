@@ -17,13 +17,9 @@ Usage:
 
 ```javascript
 const {
-  version: string;
-  width: number;
-  height: number;
-  margins: IMargin;
-  header?: IHeader;
-  watermark?: IWatermark;
-  data: IEditorData;
+  version: string
+  data: IEditorData
+  options: IEditorOption
 } = instance.command.getValue(options?: IGetValueOption)
 ```
 
@@ -244,4 +240,30 @@ const {
   elementList: IElement[]
   zone: EditorZone
 }[] = await instance.command.getTitleValue(payload: IGetTitleValueOption)
+```
+
+## getPositionContextByEvent
+
+Feature: Get position context by mouse event
+
+Usage:
+
+```javascript
+const {
+  pageNo: number
+  element: IElement | null
+  rangeRect: RangeRect | null
+}[] = await instance.command.getPositionContextByEvent(evt: MouseEvent)
+```
+
+demo:
+
+```javascript
+instance.eventBus.on(
+  'mousemove',
+  debounce(evt => {
+    const positionContext = instance.command.getPositionContextByEvent(evt)
+    console.log(positionContext)
+  }, 200)
+)``
 ```

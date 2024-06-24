@@ -1,8 +1,11 @@
 import { UNICODE_SYMBOL_REG } from '../dataset/constant/Regular'
 
-export function debounce(func: Function, delay: number) {
+export function debounce<T extends unknown[]>(
+  func: (...arg: T) => unknown,
+  delay: number
+) {
   let timer: number
-  return function (this: any, ...args: any[]) {
+  return function (this: unknown, ...args: T) {
     if (timer) {
       window.clearTimeout(timer)
     }
@@ -12,10 +15,13 @@ export function debounce(func: Function, delay: number) {
   }
 }
 
-export function throttle(func: Function, delay: number) {
+export function throttle<T extends unknown[]>(
+  func: (...arg: T) => unknown,
+  delay: number
+) {
   let lastExecTime = 0
   let timer: number
-  return function (this: any, ...args: any[]) {
+  return function (this: unknown, ...args: T) {
     const currentTime = Date.now()
     if (currentTime - lastExecTime >= delay) {
       window.clearTimeout(timer)
@@ -107,19 +113,27 @@ export function getUUID(): string {
 
 export function splitText(text: string): string[] {
   const data: string[] = []
-  const symbolMap = new Map<number, string>()
-  for (const match of text.matchAll(UNICODE_SYMBOL_REG)) {
-    symbolMap.set(match.index!, match[0])
-  }
-  let t = 0
-  while (t < text.length) {
-    const symbol = symbolMap.get(t)
-    if (symbol) {
-      data.push(symbol)
-      t += symbol.length
-    } else {
-      data.push(text[t])
-      t++
+  if (Intl.Segmenter) {
+    const segmenter = new Intl.Segmenter()
+    const segments = segmenter.segment(text)
+    for (const { segment } of segments) {
+      data.push(segment)
+    }
+  } else {
+    const symbolMap = new Map<number, string>()
+    for (const match of text.matchAll(UNICODE_SYMBOL_REG)) {
+      symbolMap.set(match.index!, match[0])
+    }
+    let t = 0
+    while (t < text.length) {
+      const symbol = symbolMap.get(t)
+      if (symbol) {
+        data.push(symbol)
+        t += symbol.length
+      } else {
+        data.push(text[t])
+        t++
+      }
     }
   }
   return data

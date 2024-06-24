@@ -772,6 +772,16 @@ instance.command.executeInsertElementList(elementList: IElement[])
 instance.command.executeAppendElementList(elementList: IElement[], options?: IAppendElementListOption)
 ```
 
+## executeUpdateElementById
+
+功能：根据 id 修改元素属性
+
+用法：
+
+```javascript
+instance.command.executeUpdateElementById(payload: IUpdateElementByIdOption)
+```
+
 ## executeSetValue
 
 功能：设置编辑器数据
@@ -910,4 +920,34 @@ instance.command.executeSetControlProperties(payload: ISetControlProperties)
 
 ```javascript
 instance.command.executeSetControlHighlight(payload: ISetControlHighlightOption)
+```
+
+## executeLocationControl
+
+功能：定位并激活控件
+
+用法：
+
+```javascript
+instance.command.executeLocationControl(controlId: string)
+```
+
+## executeUpdateOptions
+
+功能：修改配置
+
+用法：
+
+```javascript
+instance.command.executeUpdateOptions(payload: IUpdateOption)
+```
+
+## executeInsertTitle
+
+功能：插入标题
+
+用法：
+
+```javascript
+instance.command.executeInsertTitle(payload: IElement)
 ```

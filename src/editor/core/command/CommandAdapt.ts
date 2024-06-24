@@ -1,5 +1,10 @@
 import { NBSP, WRAP, ZERO } from '../../dataset/constant/Common'
-import { EDITOR_ELEMENT_STYLE_ATTR } from '../../dataset/constant/Element'
+import {
+  EDITOR_ELEMENT_STYLE_ATTR,
+  EDITOR_ROW_ATTR,
+  LIST_CONTEXT_ATTR,
+  TABLE_CONTEXT_ATTR
+} from '../../dataset/constant/Element'
 import {
   titleOrderNumberMapping,
   titleSizeMapping
@@ -45,11 +50,18 @@ import {
   IEditorHTML,
   IEditorOption,
   IEditorResult,
-  IEditorText
+  IEditorText,
+  IUpdateOption
 } from '../../interface/Editor'
-import { IElement, IElementStyle } from '../../interface/Element'
-import { IPasteOption } from '../../interface/Event'
+import {
+  IElement,
+  IElementPosition,
+  IElementStyle,
+  IUpdateElementByIdOption
+} from '../../interface/Element'
+import { IPasteOption, IPositionContextByEvent } from '../../interface/Event'
 import { IMargin } from '../../interface/Margin'
+import { ILocationPosition } from '../../interface/Position'
 import { IRange, RangeContext, RangeRect } from '../../interface/Range'
 import { IColgroup } from '../../interface/table/Colgroup'
 import { ITd } from '../../interface/table/Td'
@@ -60,7 +72,13 @@ import {
   IGetTitleValueResult
 } from '../../interface/Title'
 import { IWatermark } from '../../interface/Watermark'
-import { deepClone, downloadFile, getUUID, isObjectEqual } from '../../utils'
+import {
+  cloneProperty,
+  deepClone,
+  downloadFile,
+  getUUID,
+  isObjectEqual
+} from '../../utils'
 import {
   createDomFromElementList,
   formatElementContext,
@@ -69,8 +87,10 @@ import {
   pickElementAttr,
   getElementListByHTML,
   getTextFromElementList,
-  zipElementList
+  zipElementList,
+  getAnchorElement
 } from '../../utils/element'
+import { mergeOption } from '../../utils/option'
 import { printImageBase64 } from '../../utils/print'
 import { Control } from '../draw/control/Control'
 import { Draw } from '../draw/Draw'
@@ -83,6 +103,7 @@ import { I18n } from '../i18n/I18n'
 import { Position } from '../position/Position'
 import { RangeManager } from '../range/RangeManager'
 import { WorkerManager } from '../worker/WorkerManager'
+import { Zone } from '../zone/Zone'
 
 export class CommandAdapt {
   private draw: Draw
@@ -96,6 +117,7 @@ export class CommandAdapt {
   private workerManager: WorkerManager
   private searchManager: Search
   private i18n: I18n
+  private zone: Zone
 
   constructor(draw: Draw) {
     this.draw = draw
@@ -109,6 +131,7 @@ export class CommandAdapt {
     this.workerManager = draw.getWorkerManager()
     this.searchManager = draw.getSearch()
     this.i18n = draw.getI18n()
+    this.zone = draw.getZone()
   }
 
   public mode(payload: EditorMode) {
@@ -304,13 +327,9 @@ export class CommandAdapt {
     }
     if (!changeElementList.length) return
     changeElementList.forEach(el => {
-      delete el.size
-      delete el.font
-      delete el.color
-      delete el.bold
-      delete el.italic
-      delete el.underline
-      delete el.strikeout
+      EDITOR_ELEMENT_STYLE_ATTR.forEach(attr => {
+        delete el[attr]
+      })
     })
     this.draw.render(renderOption)
   }
@@ -714,6 +733,7 @@ export class CommandAdapt {
       } else {
         if (el.titleId) {
           delete el.titleId
+          delete el.title
           delete el.level
           delete el.size
           delete el.bold
@@ -1794,14 +1814,15 @@ export class CommandAdapt {
     if (isDisabled) return
     const { startIndex, endIndex } = this.range.getRange()
     if (!~startIndex && !~endIndex) return
-    const { value, width, height } = payload
+    const { value, width, height, imgDisplay } = payload
     this.insertElementList([
       {
         value,
         width,
         height,
         id: getUUID(),
-        type: ElementType.IMAGE
+        type: ElementType.IMAGE,
+        imgDisplay
       }
     ])
   }
@@ -1993,12 +2014,12 @@ export class CommandAdapt {
   public changeImageDisplay(element: IElement, display: ImageDisplay) {
     if (element.imgDisplay === display) return
     element.imgDisplay = display
+    const { startIndex, endIndex } = this.range.getRange()
     if (
       display === ImageDisplay.FLOAT_TOP ||
       display === ImageDisplay.FLOAT_BOTTOM
     ) {
       const positionList = this.position.getPositionList()
-      const { startIndex } = this.range.getRange()
       const {
         coordinate: { leftTop }
       } = positionList[startIndex]
@@ -2011,7 +2032,8 @@ export class CommandAdapt {
     }
     this.draw.getPreviewer().clearResizer()
     this.draw.render({
-      isSetCursor: false
+      isSetCursor: true,
+      curIndex: endIndex
     })
   }
 
@@ -2068,12 +2090,21 @@ export class CommandAdapt {
     if (!~startIndex && !~endIndex) return null
     // 选区信息
     const isCollapsed = startIndex === endIndex
+    const selectionText = this.range.toString()
+    const selectionElementList = zipElementList(
+      this.range.getSelectionElementList() || []
+    )
     // 元素信息
     const elementList = this.draw.getElementList()
     const startElement = pickElementAttr(
-      elementList[isCollapsed ? startIndex : startIndex + 1]
+      elementList[isCollapsed ? startIndex : startIndex + 1],
+      {
+        extraPickAttrs: ['id']
+      }
     )
-    const endElement = pickElementAttr(elementList[endIndex])
+    const endElement = pickElementAttr(elementList[endIndex], {
+      extraPickAttrs: ['id']
+    })
     // 页码信息
     const positionList = this.position.getPositionList()
     const startPageNo = positionList[startIndex].pageNo
@@ -2134,8 +2165,17 @@ export class CommandAdapt {
     // 区域信息
     const zone = this.draw.getZone().getZone()
     // 表格信息
-    const isTable = this.position.getPositionContext().isTable
-    return deepClone({
+    const { isTable, trIndex, tdIndex, index } =
+      this.position.getPositionContext()
+    let tableElement: IElement | null = null
+    if (isTable) {
+      const originalElementList = this.draw.getOriginalElementList()
+      const originTableElement = originalElementList[index!] || null
+      if (originTableElement) {
+        tableElement = zipElementList([originTableElement])[0]
+      }
+    }
+    return deepClone<RangeContext>({
       isCollapsed,
       startElement,
       endElement,
@@ -2143,7 +2183,12 @@ export class CommandAdapt {
       endPageNo,
       rangeRects,
       zone,
-      isTable
+      isTable,
+      trIndex: trIndex ?? null,
+      tdIndex: tdIndex ?? null,
+      tableElement,
+      selectionText,
+      selectionElementList
     })
   }
 
@@ -2224,6 +2269,42 @@ export class CommandAdapt {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
     this.draw.appendElementList(deepClone(elementList), options)
+  }
+
+  public updateElementById(payload: IUpdateElementByIdOption) {
+    function getElementIndexById(elementList: IElement[]): number {
+      for (let e = 0; e < elementList.length; e++) {
+        const element = elementList[e]
+        if (element.id === payload.id) {
+          return e
+        }
+      }
+      return -1
+    }
+    // 优先正文再页眉页脚
+    const getElementListFnList = [
+      this.draw.getOriginalMainElementList,
+      this.draw.getHeaderElementList,
+      this.draw.getFooterElementList
+    ]
+    for (const getElementList of getElementListFnList) {
+      const elementList = getElementList.call(this.draw)
+      const elementIndex = getElementIndexById(elementList)
+      if (~elementIndex) {
+        elementList[elementIndex] = {
+          ...elementList[elementIndex],
+          ...payload.properties
+        }
+        formatElementList([elementList[elementIndex]], {
+          isHandleFirstElement: false,
+          editorOptions: this.options
+        })
+        this.draw.render({
+          isSetCursor: false
+        })
+        break
+      }
+    }
   }
 
   public setValue(payload: Partial<IEditorData>) {
@@ -2399,8 +2480,95 @@ export class CommandAdapt {
     this.draw.getControl().setHighlightList(payload)
   }
 
+  public updateOptions(payload: IUpdateOption) {
+    const newOption = mergeOption(payload)
+    Object.entries(newOption).forEach(([key, value]) => {
+      Reflect.set(this.options, key, value)
+    })
+    this.forceUpdate()
+  }
+
   public getControlList(): IElement[] {
     return this.draw.getControl().getList()
+  }
+
+  public locationControl(controlId: string) {
+    function location(
+      elementList: IElement[],
+      zone: EditorZone
+    ): ILocationPosition | null {
+      let i = 0
+      while (i < elementList.length) {
+        const element = elementList[i]
+        i++
+        if (element.type === ElementType.TABLE) {
+          const trList = element.trList!
+          for (let r = 0; r < trList.length; r++) {
+            const tr = trList[r]
+            for (let d = 0; d < tr.tdList.length; d++) {
+              const td = tr.tdList[d]
+              const locationContext = location(td.value, zone)
+              if (locationContext) {
+                return {
+                  ...locationContext,
+                  positionContext: {
+                    isTable: true,
+                    index: i - 1,
+                    trIndex: r,
+                    tdIndex: d,
+                    tdId: element.tdId,
+                    trId: element.trId,
+                    tableId: element.tableId
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (element?.controlId !== controlId) continue
+        const curIndex = i - 1
+        return {
+          zone,
+          range: {
+            startIndex: curIndex,
+            endIndex: curIndex
+          },
+          positionContext: {
+            isTable: false
+          }
+        }
+      }
+      return null
+    }
+    const data = [
+      {
+        zone: EditorZone.HEADER,
+        elementList: this.draw.getHeaderElementList()
+      },
+      {
+        zone: EditorZone.MAIN,
+        elementList: this.draw.getOriginalMainElementList()
+      },
+      {
+        zone: EditorZone.FOOTER,
+        elementList: this.draw.getFooterElementList()
+      }
+    ]
+    for (const context of data) {
+      const locationContext = location(context.elementList, context.zone)
+      if (locationContext) {
+        // 设置区域、上下文、光标信息
+        this.setZone(locationContext.zone)
+        this.position.setPositionContext(locationContext.positionContext)
+        this.range.replaceRange(locationContext.range)
+        this.draw.render({
+          curIndex: locationContext.range.startIndex,
+          isCompute: false,
+          isSubmitHistory: false
+        })
+        break
+      }
+    }
   }
 
   public getContainer(): HTMLDivElement {
@@ -2471,5 +2639,85 @@ export class CommandAdapt {
       getValue(elementList, zone)
     }
     return result
+  }
+
+  public getPositionContextByEvent(
+    evt: MouseEvent
+  ): IPositionContextByEvent | null {
+    const pageIndex = (<HTMLElement>evt.target)?.dataset.index
+    if (!pageIndex) return null
+    const pageNo = Number(pageIndex)
+    const positionContext = this.position.getPositionByXY({
+      x: evt.offsetX,
+      y: evt.offsetY,
+      pageNo
+    })
+    const {
+      isDirectHit,
+      isTable,
+      index,
+      trIndex,
+      tdIndex,
+      tdValueIndex,
+      zone
+    } = positionContext
+    // 非直接命中或选区不一致时返回空值
+    if (!isDirectHit || (zone && zone !== this.zone.getZone())) return null
+    // 命中元素信息
+    let element: IElement | null = null
+    const elementList = this.draw.getOriginalElementList()
+    let position: IElementPosition | null = null
+    const positionList = this.position.getOriginalPositionList()
+    if (isTable) {
+      const td = elementList[index!].trList?.[trIndex!].tdList[tdIndex!]
+      element = td?.value[tdValueIndex!] || null
+      position = td?.positionList?.[tdValueIndex!] || null
+    } else {
+      element = elementList[index] || null
+      position = positionList[index] || null
+    }
+    // 元素包围信息
+    let rangeRect: RangeRect | null = null
+    if (position) {
+      const {
+        pageNo,
+        coordinate: { leftTop, rightTop },
+        lineHeight
+      } = position
+      const height = this.draw.getOriginalHeight()
+      const pageGap = this.draw.getOriginalPageGap()
+      rangeRect = {
+        x: leftTop[0],
+        y: leftTop[1] + pageNo * (height + pageGap),
+        width: rightTop[0] - leftTop[0],
+        height: lineHeight
+      }
+    }
+    return {
+      pageNo,
+      element,
+      rangeRect
+    }
+  }
+
+  public insertTitle(payload: IElement) {
+    const isReadonly = this.draw.isReadonly()
+    if (isReadonly) return
+    const cloneElement = deepClone(payload)
+    // 格式化上下文信息
+    const { startIndex } = this.range.getRange()
+    const elementList = this.draw.getElementList()
+    const copyElement = getAnchorElement(elementList, startIndex)
+    if (!copyElement) return
+    const cloneAttr = [
+      ...TABLE_CONTEXT_ATTR,
+      ...EDITOR_ROW_ATTR,
+      ...LIST_CONTEXT_ATTR
+    ]
+    cloneElement.valueList?.forEach(valueItem => {
+      cloneProperty<IElement>(cloneAttr, copyElement, valueItem)
+    })
+    // 插入标题
+    this.draw.insertElementList([cloneElement])
   }
 }

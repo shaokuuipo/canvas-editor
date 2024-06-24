@@ -21,10 +21,11 @@ import {
 import { LaTexParticle } from '../core/draw/particle/latex/LaTexParticle'
 import { NON_BREAKING_SPACE, ZERO } from '../dataset/constant/Common'
 import {
+  BLOCK_ELEMENT_TYPE,
   CONTROL_STYLE_ATTR,
   EDITOR_ELEMENT_CONTEXT_ATTR,
   EDITOR_ELEMENT_ZIP_ATTR,
-  INLINE_ELEMENT_TYPE,
+  EDITOR_ROW_ATTR,
   INLINE_NODE_NAME,
   TABLE_CONTEXT_ATTR,
   TABLE_TD_ZIP_ATTR,
@@ -486,12 +487,22 @@ export function isSameElementExceptValue(
   }
   return true
 }
-
-export function pickElementAttr(payload: IElement): IElement {
+interface IPickElementOption {
+  extraPickAttrs?: Array<keyof IElement>
+}
+export function pickElementAttr(
+  payload: IElement,
+  option: IPickElementOption = {}
+): IElement {
+  const { extraPickAttrs } = option
+  const zipAttrs = EDITOR_ELEMENT_ZIP_ATTR
+  if (extraPickAttrs) {
+    zipAttrs.push(...extraPickAttrs)
+  }
   const element: IElement = {
     value: payload.value === ZERO ? `\n` : payload.value
   }
-  EDITOR_ELEMENT_ZIP_ATTR.forEach(attr => {
+  zipAttrs.forEach(attr => {
     const value = payload[attr] as never
     if (value !== undefined) {
       element[attr] = value
@@ -500,7 +511,14 @@ export function pickElementAttr(payload: IElement): IElement {
   return element
 }
 
-export function zipElementList(payload: IElement[]): IElement[] {
+interface IZipElementListOption {
+  extraPickAttrs?: Array<keyof IElement>
+}
+export function zipElementList(
+  payload: IElement[],
+  options: IZipElementListOption = {}
+): IElement[] {
+  const { extraPickAttrs } = options
   const elementList = deepClone(payload)
   const zipElementListData: IElement[] = []
   let e = 0
@@ -540,7 +558,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
           valueList.push(titleE)
           e++
         }
-        titleElement.valueList = zipElementList(valueList)
+        titleElement.valueList = zipElementList(valueList, options)
         element = titleElement
       }
     } else if (element.listId && element.listType) {
@@ -568,7 +586,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
           valueList.push(listE)
           e++
         }
-        listElement.valueList = zipElementList(valueList)
+        listElement.valueList = zipElementList(valueList, options)
         element = listElement
       }
     } else if (element.type === ElementType.TABLE) {
@@ -598,7 +616,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
             const zipTd: ITd = {
               colspan: td.colspan,
               rowspan: td.rowspan,
-              value: zipElementList(td.value)
+              value: zipElementList(td.value, options)
             }
             // 压缩单元格属性
             TABLE_TD_ZIP_ATTR.forEach(attr => {
@@ -632,7 +650,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
           valueList.push(hyperlinkE)
           e++
         }
-        hyperlinkElement.valueList = zipElementList(valueList)
+        hyperlinkElement.valueList = zipElementList(valueList, options)
         element = hyperlinkElement
       }
     } else if (element.type === ElementType.DATE) {
@@ -655,7 +673,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
           valueList.push(dateE)
           e++
         }
-        dateElement.valueList = zipElementList(valueList)
+        dateElement.valueList = zipElementList(valueList, options)
         element = dateElement
       }
     } else if (element.controlId) {
@@ -671,9 +689,11 @@ export function zipElementList(payload: IElement[]): IElement[] {
           ...controlDefaultStyle
         }
         const controlElement: IElement = {
+          ...pickObject(element, EDITOR_ROW_ATTR),
           type: ElementType.CONTROL,
           value: '',
-          control
+          control,
+          controlId
         }
         const valueList: IElement[] = []
         while (e < elementList.length) {
@@ -689,12 +709,12 @@ export function zipElementList(payload: IElement[]): IElement[] {
           }
           e++
         }
-        controlElement.control!.value = zipElementList(valueList)
-        element = controlElement
+        controlElement.control!.value = zipElementList(valueList, options)
+        element = pickElementAttr(controlElement, { extraPickAttrs })
       }
     }
     // 组合元素
-    const pickElement = pickElementAttr(element)
+    const pickElement = pickElementAttr(element, { extraPickAttrs })
     if (
       !element.type ||
       element.type === ElementType.TEXT ||
@@ -706,7 +726,10 @@ export function zipElementList(payload: IElement[]): IElement[] {
         e++
         if (
           nextElement &&
-          isSameElementExceptValue(pickElement, pickElementAttr(nextElement))
+          isSameElementExceptValue(
+            pickElement,
+            pickElementAttr(nextElement, { extraPickAttrs })
+          )
         ) {
           const nextValue =
             nextElement.value === ZERO ? '\n' : nextElement.value
@@ -723,7 +746,7 @@ export function zipElementList(payload: IElement[]): IElement[] {
   return zipElementListData
 }
 
-export function getElementRowFlex(node: HTMLElement) {
+export function convertTextAlignToRowFlex(node: HTMLElement) {
   const textAlign = window.getComputedStyle(node).textAlign
   switch (textAlign) {
     case 'left':
@@ -740,6 +763,26 @@ export function getElementRowFlex(node: HTMLElement) {
       return RowFlex.JUSTIFY
     default:
       return RowFlex.LEFT
+  }
+}
+
+export function convertRowFlexToTextAlign(rowFlex: RowFlex) {
+  return rowFlex === RowFlex.ALIGNMENT ? 'justify' : rowFlex
+}
+
+export function convertRowFlexToJustifyContent(rowFlex: RowFlex) {
+  switch (rowFlex) {
+    case RowFlex.LEFT:
+      return 'flex-start'
+    case RowFlex.CENTER:
+      return 'center'
+    case RowFlex.RIGHT:
+      return 'flex-end'
+    case RowFlex.ALIGNMENT:
+    case RowFlex.JUSTIFY:
+      return 'space-between'
+    default:
+      return 'flex-start'
   }
 }
 
@@ -788,14 +831,15 @@ export function formatElementContext(
       isBreakWarped = true
     }
     // 1. 即使换行停止也要处理表格上下文信息
-    // 2. 定位元素非列表，无需处理粘贴列表的上下文，仅处理表格上下文信息
+    // 2. 定位元素非列表，无需处理粘贴列表的上下文，仅处理表格及行上下文信息
     if (
       isBreakWarped ||
       (!copyElement.listId && targetElement.type === ElementType.LIST)
     ) {
-      cloneProperty<IElement>(TABLE_CONTEXT_ATTR, copyElement, targetElement)
+      const cloneAttr = [...TABLE_CONTEXT_ATTR, ...EDITOR_ROW_ATTR]
+      cloneProperty<IElement>(cloneAttr, copyElement, targetElement)
       targetElement.valueList?.forEach(valueItem => {
-        cloneProperty<IElement>(TABLE_CONTEXT_ATTR, copyElement, valueItem)
+        cloneProperty<IElement>(cloneAttr, copyElement, valueItem)
       })
       continue
     }
@@ -823,17 +867,11 @@ export function convertElementToDom(
     tagName = 'sup'
   } else if (element.type === ElementType.SUBSCRIPT) {
     tagName = 'sub'
-  } else if (
-    element.rowFlex === RowFlex.CENTER ||
-    element.rowFlex === RowFlex.RIGHT
-  ) {
-    tagName = 'p'
   }
   const dom = document.createElement(tagName)
   dom.style.fontFamily = element.font || options.defaultFont
   if (element.rowFlex) {
-    const isAlignment = element.rowFlex === RowFlex.ALIGNMENT
-    dom.style.textAlign = isAlignment ? 'justify' : element.rowFlex
+    dom.style.textAlign = convertRowFlexToTextAlign(element.rowFlex)
   }
   if (element.color) {
     dom.style.color = element.color
@@ -891,6 +929,49 @@ export function splitListElement(
     }
   }
   return listElementListMap
+}
+
+export interface IElementListGroupRowFlex {
+  rowFlex: RowFlex | null
+  data: IElement[]
+}
+
+export function groupElementListByRowFlex(
+  elementList: IElement[]
+): IElementListGroupRowFlex[] {
+  const elementListGroupList: IElementListGroupRowFlex[] = []
+  if (!elementList.length) return elementListGroupList
+  let currentRowFlex: RowFlex | null = elementList[0]?.rowFlex || null
+  elementListGroupList.push({
+    rowFlex: currentRowFlex,
+    data: [elementList[0]]
+  })
+  for (let e = 1; e < elementList.length; e++) {
+    const element = elementList[e]
+    const rowFlex = element.rowFlex || null
+    // 行布局相同&非块元素时追加数据，否则新增分组
+    if (
+      currentRowFlex === rowFlex &&
+      !getIsBlockElement(element) &&
+      !getIsBlockElement(elementList[e - 1])
+    ) {
+      const lastElementListGroup =
+        elementListGroupList[elementListGroupList.length - 1]
+      lastElementListGroup.data.push(element)
+    } else {
+      elementListGroupList.push({
+        rowFlex,
+        data: [element]
+      })
+      currentRowFlex = rowFlex
+    }
+  }
+  // 压缩数据
+  for (let g = 0; g < elementListGroupList.length; g++) {
+    const elementListGroup = elementListGroupList[g]
+    elementListGroup.data = zipElementList(elementListGroup.data)
+  }
+  return elementListGroupList
 }
 
 export function createDomFromElementList(
@@ -953,7 +1034,7 @@ export function createDomFromElementList(
             if (td.borderTypes?.includes(TdBorder.LEFT)) {
               tdDom.style.borderLeft = borderStyle
             }
-            const childDom = buildDom(zipElementList(td.value!))
+            const childDom = createDomFromElementList(td.value!, options)
             tdDom.innerHTML = childDom.innerHTML
             if (td.backgroundColor) {
               tdDom.style.backgroundColor = td.backgroundColor
@@ -974,7 +1055,7 @@ export function createDomFromElementList(
         const h = document.createElement(
           `h${titleOrderNumberMapping[element.level!]}`
         )
-        const childDom = buildDom(zipElementList(element.valueList!))
+        const childDom = buildDom(element.valueList!)
         h.innerHTML = childDom.innerHTML
         clipboardDom.append(h)
       } else if (element.type === ElementType.LIST) {
@@ -1025,7 +1106,7 @@ export function createDomFromElementList(
         clipboardDom.append(tab)
       } else if (element.type === ElementType.CONTROL) {
         const controlElement = document.createElement('span')
-        const childDom = buildDom(zipElementList(element.control?.value || []))
+        const childDom = buildDom(element.control?.value || [])
         controlElement.innerHTML = childDom.innerHTML
         clipboardDom.append(controlElement)
       } else if (
@@ -1045,17 +1126,48 @@ export function createDomFromElementList(
         if (payload[e - 1]?.type === ElementType.TITLE) {
           text = text.replace(/^\n/, '')
         }
-        // 块元素移除尾部换行符
-        if (dom.tagName === 'P') {
-          text = text.replace(/\n$/, '')
-        }
         dom.innerText = text.replace(new RegExp(`${ZERO}`, 'g'), '\n')
         clipboardDom.append(dom)
       }
     }
     return clipboardDom
   }
-  return buildDom(zipElementList(elementList))
+  // 按行布局分类创建dom
+  const clipboardDom = document.createElement('div')
+  const groupElementList = groupElementListByRowFlex(elementList)
+  for (let g = 0; g < groupElementList.length; g++) {
+    const elementGroupRowFlex = groupElementList[g]
+    // 行布局样式设置
+    const isDefaultRowFlex =
+      !elementGroupRowFlex.rowFlex ||
+      elementGroupRowFlex.rowFlex === RowFlex.LEFT
+    // 块元素使用flex否则使用text-align
+    const rowFlexDom = document.createElement('div')
+    if (!isDefaultRowFlex) {
+      const firstElement = elementGroupRowFlex.data[0]
+      if (getIsBlockElement(firstElement)) {
+        rowFlexDom.style.display = 'flex'
+        rowFlexDom.style.justifyContent = convertRowFlexToJustifyContent(
+          firstElement.rowFlex!
+        )
+      } else {
+        rowFlexDom.style.textAlign = convertRowFlexToTextAlign(
+          elementGroupRowFlex.rowFlex!
+        )
+      }
+    }
+    // 布局内容
+    rowFlexDom.innerHTML = buildDom(elementGroupRowFlex.data).innerHTML
+    // 未设置行布局时无需行布局容器
+    if (!isDefaultRowFlex) {
+      clipboardDom.append(rowFlexDom)
+    } else {
+      rowFlexDom.childNodes.forEach(child => {
+        clipboardDom.append(child.cloneNode(true))
+      })
+    }
+  }
+  return clipboardDom
 }
 
 export function convertTextNodeToElement(
@@ -1067,7 +1179,7 @@ export function convertTextNodeToElement(
     parentNode.nodeName === 'FONT'
       ? <HTMLElement>parentNode.parentNode
       : parentNode
-  const rowFlex = getElementRowFlex(anchorNode)
+  const rowFlex = convertTextAlignToRowFlex(anchorNode)
   const value = textNode.textContent
   const style = window.getComputedStyle(anchorNode)
   if (!value || anchorNode.nodeName === 'STYLE') return null
@@ -1144,7 +1256,10 @@ export function getElementListByHTML(
           }
         } else if (/H[1-6]/.test(node.nodeName)) {
           const hElement = node as HTMLTitleElement
-          const valueList = getElementListByHTML(hElement.innerHTML, options)
+          const valueList = getElementListByHTML(
+            replaceHTMLElementTag(hElement, 'div').outerHTML,
+            options
+          )
           elementList.push({
             value: '',
             type: ElementType.TITLE,
@@ -1235,9 +1350,7 @@ export function getElementListByHTML(
               }
               tr.tdList.push(td)
             })
-            if (tr.tdList.length) {
-              element.trList!.push(tr)
-            }
+            element.trList!.push(tr)
           })
           if (element.trList!.length) {
             // 列选项数据
@@ -1380,10 +1493,23 @@ export function getSlimCloneElementList(elementList: IElement[]) {
   ])
 }
 
-export function getIsInlineElement(element?: IElement) {
+export function getIsBlockElement(element?: IElement) {
   return (
     !!element?.type &&
-    (INLINE_ELEMENT_TYPE.includes(element.type) ||
+    (BLOCK_ELEMENT_TYPE.includes(element.type) ||
       element.imgDisplay === ImageDisplay.INLINE)
   )
+}
+
+export function replaceHTMLElementTag(
+  oldDom: HTMLElement,
+  tagName: keyof HTMLElementTagNameMap
+): HTMLElement {
+  const newDom = document.createElement(tagName)
+  for (let i = 0; i < oldDom.attributes.length; i++) {
+    const attr = oldDom.attributes[i]
+    newDom.setAttribute(attr.name, attr.value)
+  }
+  newDom.innerHTML = oldDom.innerHTML
+  return newDom
 }

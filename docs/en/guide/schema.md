@@ -24,6 +24,7 @@ interface IElement {
   value: string;
   valueList?: IElement[]; // Use of composite elements (hyperlinks, titles, lists, and so on).
   extension?: unknown;
+  externalId?: string;
   // style
   font?: string;
   size?: number;
@@ -60,6 +61,7 @@ interface IElement {
     tdList: {
       colspan: number;
       rowspan: number;
+      conceptId?: string;
       verticalAlign?: VerticalAlign;
       backgroundColor?: string;
       borderTypes?: TdBorder[];
@@ -80,7 +82,8 @@ interface IElement {
       TEXT = 'text',
       SELECT = 'select',
       CHECKBOX = 'checkbox',
-      RADIO = 'radio'
+      RADIO = 'radio',
+      DATE = 'date'
     };
     value: IElement[] | null;
     placeholder?: string;
@@ -101,18 +104,7 @@ interface IElement {
       value: string;
       code: string;
     }[];
-    checkbox?: {
-      value: boolean | null;
-      code?: string;
-      min?: number;
-      max?: number;
-      disabled?: boolean;
-    };
-    radio?: {
-      value: boolean | null;
-      code?: string;
-      disabled?: boolean;
-    };
+    dateFormat?: string;
     font?: string;
     size?: number;
     bold?: boolean;
@@ -132,14 +124,10 @@ interface IElement {
   // checkbox
   checkbox?: {
     value: boolean | null;
-    code?: string;
-    disabled?: boolean;
   };
   // radio
   radio?: {
     value: boolean | null;
-    code?: string;
-    disabled?: boolean;
   };
   // LaTeX
   laTexSVG?: string;
